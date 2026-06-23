@@ -1,0 +1,139 @@
+# .NET build output
+bin/
+obj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+
+# Visual Studio / VS Code / Rider
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+project.lock.json
+project.assets.json
+
+# .NET local tools / test results
+.config/dotnet-tools.json
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+.coverage/
+.coverlet/
+
+# MAUI / Xamarin generated files
+*.apk
+*.aab
+*.ipa
+*.app
+*.app.dSYM/
+*.xcarchive/
+*.mSYM/
+*.dsym/
+*.dSYM/
+*.mdb
+*.pdb
+*.dll
+*.exe
+*.runtimeconfig.json
+*.deps.json
+
+# Android generated/signing/cache files
+*.keystore
+*.jks
+*.apk.idsig
+*.ap_
+*.dex
+*.class
+local.properties
+.android/
+.gradle/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# iOS / Apple signing and provisioning
+*.mobileprovision
+*.provisionprofile
+*.cer
+*.p12
+*.pem
+*.key
+*.xcuserstate
+*.xcworkspace/
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+DerivedData/
+
+# Mac files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+.tmp/
+
+# Environment / local machine config
+.env
+.env.*
+!.env.example
+
+# App secrets
+secrets.json
+appsettings.Development.json
+appsettings.Local.json
+
+# WFDB notes:
+# Keep small bundled sample ECG records committed if they are intentionally part of the app:
+# Resources/Raw/Ekg/*.hea
+# Resources/Raw/Ekg/*.dat
+# Resources/Raw/Ekg/records.txt
+#
+# Ignore large local ECG datasets unless explicitly meant to be bundled:
+Data/
+Datasets/
+LocalData/
+WFDB/
+*.atr
+*.qrs
+*.ann
+*.hea~
+*.dat~
+
