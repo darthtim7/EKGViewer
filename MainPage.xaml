@@ -22,9 +22,13 @@
                Text="Loading..."
                FontSize="13" />
 
-        <GraphicsView x:Name="EcgGraph"
-                      Grid.Row="2"
-                      HeightRequest="420" />
+        <Grid Grid.Row="2" RowDefinitions="*,*" RowSpacing="8">
+            <GraphicsView x:Name="EcgGraph"
+                          Grid.Row="0" />
+
+            <GraphicsView x:Name="HeartModel"
+                          Grid.Row="1" />
+        </Grid>
     </Grid>
 
     <!--

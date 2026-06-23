@@ -7,6 +7,7 @@ public partial class MainPage : ContentPage
 	int count = 0;
 	private readonly WFDBReader _reader = new("Ekg");
     private readonly ECGDrawable _drawable = new();
+    private readonly HeartModelDrawable _heartDrawable = new();
     private bool _loading;
 
  
@@ -15,6 +16,7 @@ public partial class MainPage : ContentPage
 		InitializeComponent();
 
 		EcgGraph.Drawable = _drawable;
+        HeartModel.Drawable = _heartDrawable;
         Loaded += OnLoaded;
 
 	}
