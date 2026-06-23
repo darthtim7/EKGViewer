@@ -1,6 +1,7 @@
 ﻿namespace EKGViewer;
 using EKGViewer.File;
 using EKGViewer.Graphics;
+using Microsoft.Maui.Graphics;
 
 public partial class MainPage : ContentPage
 {
@@ -17,9 +18,35 @@ public partial class MainPage : ContentPage
 
 		EcgGraph.Drawable = _drawable;
         HeartModel.Drawable = _heartDrawable;
+        HeartModel.StartInteraction += OnHeartStartInteraction;
+        HeartModel.DragInteraction += OnHeartDragInteraction;
+        HeartModel.EndInteraction += OnHeartEndInteraction;
         Loaded += OnLoaded;
 
 	}
+
+    private PointF? _lastHeartTouch;
+
+    private void OnHeartStartInteraction(object? sender, TouchEventArgs e)
+    {
+        _lastHeartTouch = e.Touches.FirstOrDefault();
+    }
+
+    private void OnHeartDragInteraction(object? sender, TouchEventArgs e)
+    {
+        if (_lastHeartTouch is not PointF lastTouch || e.Touches.Length == 0)
+            return;
+
+        var currentTouch = e.Touches[0];
+        _heartDrawable.Rotate(currentTouch.X - lastTouch.X, currentTouch.Y - lastTouch.Y);
+        _lastHeartTouch = currentTouch;
+        HeartModel.Invalidate();
+    }
+
+    private void OnHeartEndInteraction(object? sender, TouchEventArgs e)
+    {
+        _lastHeartTouch = null;
+    }
 
 	private async void OnLoaded(object? sender, EventArgs e)
     {
