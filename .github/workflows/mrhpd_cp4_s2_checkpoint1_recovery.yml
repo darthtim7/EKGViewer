@@ -59,10 +59,10 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30619032667
 
-      - name: Apply recoverable generated-source escape correction
+      - name: Apply recoverable builder corrections
         run: python mrhpd/cp4/session2/checkpoint1/patch_generated_audit_newline.py
 
-      - name: Compile Checkpoint 1 builder and generated-source patch
+      - name: Compile Checkpoint 1 builder and recovery patch
         run: |
           python -m py_compile mrhpd/cp4/session2/checkpoint1/patch_generated_audit_newline.py
           python -m py_compile mrhpd/cp4/session2/checkpoint1/build_checkpoint1_recovery.py
@@ -130,14 +130,18 @@ jobs:
           d=Path('dist_cp4_s2_cp1')
           recovery=list(d.glob('*RECOVERY DATA THROUGH RESPONSE 67*.zip'))
           assert len(recovery)==1
+          inspection_json=list(Path('response66_inspection').rglob('MRHPD_RESPONSE66_PROJECT_INSPECTION.json'))
+          inspection_log=list(Path('response66_inspection').rglob('inspection.log'))
+          assert len(inspection_json)==1, inspection_json
+          assert len(inspection_log)==1, inspection_log
           files=[
               recovery[0],
               d/f'{recovery[0].name}.sha256.txt',
               d/'MRHPD v3.0.0a Response 67 Checkpoint 1 Recovery Verification.json',
               d/'MRHPD_RESPONSE67_CHECKPOINT1_BUILD_SUMMARY.json',
               Path('checkpoint1-build.log'),
-              Path('response66_inspection/MRHPD_RESPONSE66_PROJECT_INSPECTION.json'),
-              Path('response66_inspection/inspection.log'),
+              inspection_json[0],
+              inspection_log[0],
           ]
           missing=[str(p) for p in files if not p.exists()]
           assert not missing, missing
