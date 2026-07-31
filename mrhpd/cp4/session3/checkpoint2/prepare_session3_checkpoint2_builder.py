@@ -106,6 +106,7 @@ if "V3-CP4-S2-REC-GENERATED-AUDIT-NEWLINE-ESCAPING-CORRECTED" not in text:
 # Advance current response 68 -> 71 before introducing the Response 70 predecessor.
 for old, new in [
     ("Response 68", "Response 71"),
+    ("RESPONSE 68", "RESPONSE 71"),
     ("response68", "response71"),
     ("RESPONSE68", "RESPONSE71"),
     ("Response_68", "Response_71"),
@@ -119,6 +120,7 @@ text = replace_number_tokens(text, {"68": "71"})
 # Advance predecessor checkpoint 67 -> 70.
 for old, new in [
     ("Response 67", "Response 70"),
+    ("RESPONSE 67", "RESPONSE 70"),
     ("response67", "response70"),
     ("RESPONSE67", "RESPONSE70"),
     ("Response_67", "Response_70"),
@@ -131,6 +133,7 @@ for old, new in [
 # Advance immutable full-restore baseline 66 -> 69.
 for old, new in [
     ("Response 66", "Response 69"),
+    ("RESPONSE 66", "RESPONSE 69"),
     ("response66", "response69"),
     ("RESPONSE66", "RESPONSE69"),
     ("Response_66", "Response_69"),
@@ -231,6 +234,7 @@ required = [
     "--base-response69-restore",
     "--response69-dir",
     "--response70-dir",
+    "*COMPLETE PROJECT THROUGH RESPONSE 69*.zip",
     "session_3_of_3_complete",
     "RECOVERY_EVENTS_139_154.json",
 ]
@@ -240,11 +244,14 @@ if missing:
 
 prohibited = [
     "RESPONSE68",
+    "RESPONSE 68",
     "Response 68",
     "response68",
     "RESPONSE67",
+    "RESPONSE 67",
     "Response 67",
     "response67",
+    "RESPONSE 66",
     "section4_session2",
     "MRHPD-V3-CP4-S2-CP2",
     "S4S2",
