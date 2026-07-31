@@ -116,7 +116,7 @@ def extract_recovery(response68_dir: Path, output_dir: Path) -> Path:
 
 
 def patch_builder_adapter(path: Path = ADAPTER_PATH) -> dict[str, object]:
-    """Correct nested generated-source delimiters without altering governed logic."""
+    """Correct generated-source delimiters and current schema compatibility."""
     text = path.read_text(encoding="utf-8")
     original = text
     replacements = [
@@ -148,6 +148,21 @@ def patch_builder_adapter(path: Path = ADAPTER_PATH) -> dict[str, object]:
             applied.append(label)
         elif new not in text:
             raise RuntimeError(f"{label} target not found")
+
+    compatibility_marker = "# MRHPD Session 2 cross-reference schema compatibility"
+    compatibility_anchor = "# Final exact naming and summary-schema corrections.\n"
+    compatibility_block = '''# MRHPD Session 2 cross-reference schema compatibility
+_cross_reference_count_old = 'con.execute("SELECT COUNT(*) FROM publication_cross_reference WHERE COALESCE(is_current,1)=1").fetchone()[0]'
+_cross_reference_count_new = '(con.execute("SELECT COUNT(*) FROM publication_cross_reference WHERE COALESCE(is_current,1)=1").fetchone()[0] if "is_current" in table_columns(con, "publication_cross_reference") else con.execute("SELECT COUNT(*) FROM publication_cross_reference").fetchone()[0])'
+text = text.replace(_cross_reference_count_old, _cross_reference_count_new)
+
+'''
+    if compatibility_marker not in text:
+        if compatibility_anchor not in text:
+            raise RuntimeError("cross-reference compatibility insertion anchor not found")
+        text = text.replace(compatibility_anchor, compatibility_block + compatibility_anchor, 1)
+        applied.append("cross-reference schema compatibility")
+
     if text != original:
         path.write_text(text, encoding="utf-8")
     return {
