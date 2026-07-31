@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      SOURCE_URL: 'https://sdmntpreastus.oaiusercontent.com/files/00000000-9fc0-81f9-ade9-e409bea4ad79/raw?se=2026-07-31T01:41:32Z&sp=r&sv=2026-02-06&sr=b&scid=916e5fd3-9bcb-5e00-b274-6d3cc9d8103c&skoid=de71a0d5-fb02-4fce-be69-9296aced242b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-07-30T08:25:12Z&ske=2026-08-01T08:25:12Z&sks=b&skv=2026-02-06&sig=qRZOOEw5V2/7boO9F1d03O%2BM117k19Ho2swjXCQgSF4%3D'
+      SOURCE_URL: 'https://sdmntprnorthcentralus.oaiusercontent.com/files/00000000-ded4-822f-8614-c0d9c7a50e51/raw?se=2026-07-31T01:51:33Z&sp=r&sv=2026-02-06&sr=b&scid=6a85fa1e-7784-5b0c-9700-ea54640f27f8&skoid=de71a0d5-fb02-4fce-be69-9296aced242b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-07-30T08:19:12Z&ske=2026-08-01T08:19:12Z&sks=b&skv=2026-02-06&sig=Igvt0pxgTMLAKlJusjbwY2S7jMUhHs4fcT14JharbMM%3D'
       FINALIZER_PART1_URL: 'https://at.adobe.com/1c0na7Hw8xfKC2Vx'
       AUDIT_URL: 'https://at.adobe.com/A6kphh4trMBRHjJ2'
     steps:
