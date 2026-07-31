@@ -1,0 +1,74 @@
+name: MRHPD public runner capability probe
+
+on:
+  push:
+    branches:
+      - mrhpd-recovery-runner-20260730
+    paths:
+      - '.github/workflows/mrhpd_public_runner_probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CROSS_REPO_TOKEN: ${{ secrets.GH_PAT || secrets.PAT || secrets.PERSONAL_ACCESS_TOKEN || github.token }}
+    steps:
+      - name: Runtime probe
+        run: |
+          set -euo pipefail
+          python3 --version
+          uname -a
+          printf 'MRHPD public runner started successfully.\n'
+
+      - name: Test authenticated access to private MRHPD repository and source artifact
+        run: |
+          set -euo pipefail
+          mkdir -p probe
+          repo_status=$(curl -sS -o probe/repo.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${CROSS_REPO_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            https://api.github.com/repos/darthtim7/MedGPT)
+          artifact_status=$(curl -sS -o probe/artifact.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${CROSS_REPO_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            https://api.github.com/repos/darthtim7/MedGPT/actions/artifacts/8760714177)
+          printf 'repository_http_status=%s\nartifact_http_status=%s\n' "$repo_status" "$artifact_status" | tee probe/status.txt
+          if [[ "$repo_status" == '200' ]]; then
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('probe/repo.json').read_text())
+          print('repository_access=passed')
+          print('repository_private=' + str(value.get('private')).lower())
+          PY
+          else
+            printf 'repository_access=failed\n'
+          fi
+          if [[ "$artifact_status" == '200' ]]; then
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('probe/artifact.json').read_text())
+          print('artifact_access=passed')
+          print('artifact_name=' + str(value.get('name')))
+          print('artifact_size_in_bytes=' + str(value.get('size_in_bytes')))
+          PY
+          else
+            printf 'artifact_access=failed\n'
+          fi
+
+      - name: Upload probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-public-runner-probe
+          path: probe/status.txt
+          if-no-files-found: error
+          retention-days: 30
