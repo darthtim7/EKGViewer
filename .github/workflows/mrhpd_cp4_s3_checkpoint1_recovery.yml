@@ -66,12 +66,14 @@ jobs:
           python -m py_compile mrhpd/cp4/session3/checkpoint1/relax_generated_integration_patcher.py
           python -m py_compile mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py
           python -m py_compile mrhpd/cp4/session3/checkpoint1/normalize_generated_session3_builder.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py
           python -m py_compile mrhpd/cp4/session3/checkpoint1/session3_release_governance.py
           python mrhpd/cp4/session3/checkpoint1/prepare_session3_checkpoint1_builder.py | tee builder-generation.log
           python mrhpd/cp4/session3/checkpoint1/relax_generated_integration_patcher.py | tee patcher-relaxation.log
           python -m py_compile mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py
           python mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py | tee builder-integration.log
           python mrhpd/cp4/session3/checkpoint1/normalize_generated_session3_builder.py | tee builder-normalization.log
+          python mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py | tee builder-report-fix.log
           python -m py_compile mrhpd/cp4/session3/checkpoint1/build_checkpoint1_recovery.py
 
       - name: Build Section 4 Session 3 Checkpoint 1 recovery through Response 70
@@ -174,11 +176,13 @@ jobs:
               Path('patcher-relaxation.log'),
               Path('builder-integration.log'),
               Path('builder-normalization.log'),
+              Path('builder-report-fix.log'),
               Path('checkpoint1-build.log'),
               Path('mrhpd/cp4/session3/checkpoint1/prepare_session3_checkpoint1_builder.py'),
               Path('mrhpd/cp4/session3/checkpoint1/relax_generated_integration_patcher.py'),
               Path('mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py'),
               Path('mrhpd/cp4/session3/checkpoint1/normalize_generated_session3_builder.py'),
+              Path('mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py'),
               Path('mrhpd/cp4/session3/checkpoint1/session3_release_governance.py'),
               Path('mrhpd/cp4/session3/checkpoint1/build_checkpoint1_recovery.py'),
               baseline[0],
@@ -217,6 +221,7 @@ jobs:
           cp -f patcher-relaxation.log session3-checkpoint1-failure/ 2>/dev/null || true
           cp -f builder-integration.log session3-checkpoint1-failure/ 2>/dev/null || true
           cp -f builder-normalization.log session3-checkpoint1-failure/ 2>/dev/null || true
+          cp -f builder-report-fix.log session3-checkpoint1-failure/ 2>/dev/null || true
           cp -f checkpoint1-build.log session3-checkpoint1-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session3/checkpoint1/*.py session3-checkpoint1-failure/ 2>/dev/null || true
           find response69_artifacts response69_verification dist_cp4_s3_cp1 -maxdepth 12 -type f -printf '%p\t%s bytes\n' > session3-checkpoint1-failure/file-inventory.txt 2>/dev/null || true
