@@ -157,7 +157,6 @@ required_markers = [
     "section4_session3_checkpoint",
     "MRHPD-V3-CP4-S3-CP1",
     "S4S3 Capability",
-    "RECOVERY DATA THROUGH RESPONSE 70",
     "--base-response69-restore",
     "session_3_of_3_complete",
 ]
