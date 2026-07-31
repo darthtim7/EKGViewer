@@ -59,8 +59,13 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30619032667
 
-      - name: Compile Checkpoint 1 builder
-        run: python -m py_compile mrhpd/cp4/session2/checkpoint1/build_checkpoint1_recovery.py
+      - name: Apply recoverable generated-source escape correction
+        run: python mrhpd/cp4/session2/checkpoint1/patch_generated_audit_newline.py
+
+      - name: Compile Checkpoint 1 builder and generated-source patch
+        run: |
+          python -m py_compile mrhpd/cp4/session2/checkpoint1/patch_generated_audit_newline.py
+          python -m py_compile mrhpd/cp4/session2/checkpoint1/build_checkpoint1_recovery.py
 
       - name: Build Section 4 Session 2 Checkpoint 1 recovery through Response 67
         run: |
@@ -166,6 +171,7 @@ jobs:
           mkdir -p checkpoint1-failure
           cp -f checkpoint1-build.log checkpoint1-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session2/checkpoint1/build_checkpoint1_recovery.py checkpoint1-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session2/checkpoint1/patch_generated_audit_newline.py checkpoint1-failure/ 2>/dev/null || true
           find response66_artifacts response66_inspection dist_cp4_s2_cp1 -maxdepth 8 -type f -printf '%p\t%s bytes\n' > checkpoint1-failure/file-inventory.txt 2>/dev/null || true
           printf 'The Response 66 restore, project snapshot, frozen Section 3 release, and accepted predecessor were never modified in place.\n' > checkpoint1-failure/RECOVERY_NOTICE.txt
 
