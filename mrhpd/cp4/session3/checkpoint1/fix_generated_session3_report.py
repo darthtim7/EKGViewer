@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Correct inherited three-column baseline and QA report row contracts."""
+"""Correct inherited report row contracts and clean-apply manifest parsing."""
 from __future__ import annotations
 
 import hashlib
@@ -69,10 +69,16 @@ if new_qa not in text:
     text = replace_once(text, old_qa, new_qa, "three-column QA report row contract")
     applied.append("three-column QA report row contract")
 
-text = text.replace("RECOVERY_EVENTS_125_135.json", "RECOVERY_EVENTS_125_137.json")
+old_manifest = "M={json.dumps(manifest,ensure_ascii=False)}"
+new_manifest = "M=json.loads({json.dumps(json.dumps(manifest,ensure_ascii=False),ensure_ascii=False)})"
+if new_manifest not in text:
+    text = replace_once(text, old_manifest, new_manifest, "embedded recovery manifest JSON parsing")
+    applied.append("embedded recovery manifest JSON parsing")
+
+text = text.replace("RECOVERY_EVENTS_125_135.json", "RECOVERY_EVENTS_125_138.json")
 
 anchor = "        recovery_events=[inspection_event,capabilities_event,evidence_event,release_governance_event,app_event,package_event,marker_gate_event,integration_anchor_event,uppercase_label_event,application_audit_escape_event,release_audit_sql_event]\n"
-if "V3-CP4-S3-REC-QA-REPORT-ROW-CONTRACT-CORRECTED" not in text:
+if "V3-CP4-S3-REC-CLEAN-APPLY-MANIFEST-JSON-PARSED" not in text:
     block = '''        baseline_report_event={
             "event_number":136,
             "event_code":"V3-CP4-S3-REC-BASELINE-REPORT-ROW-CONTRACT-CORRECTED","occurred_at":NOW,
@@ -95,23 +101,36 @@ if "V3-CP4-S3-REC-QA-REPORT-ROW-CONTRACT-CORRECTED" not in text:
             "data_quality_effect":"None; no database, workbook source, application, evidence record, or publication asset changed.",
             "next_checkpoint":"Complete tracking, indexes, manifests, recovery overlay, clean apply, and transport delivery.",
         }
-        recovery_events=[inspection_event,capabilities_event,evidence_event,release_governance_event,app_event,package_event,marker_gate_event,integration_anchor_event,uppercase_label_event,application_audit_escape_event,release_audit_sql_event,baseline_report_event,qa_report_event]
+        clean_apply_manifest_event={
+            "event_number":138,
+            "event_code":"V3-CP4-S3-REC-CLEAN-APPLY-MANIFEST-JSON-PARSED","occurred_at":NOW,
+            "failed_step":"Clean-apply the emitted Response 70 recovery overlay to the exact Response 69 complete restore.",
+            "exact_error_or_reason":"The generated apply utility embedded JSON as executable Python; the JSON boolean false raised NameError rather than becoming the Python value False.",
+            "intact_artifacts":"The complete recovery overlay, reports, tracking, Source Index, Bit Index, manifests, checksums, synchronized database, workbook, application audits, publication, and editable assembly were already assembled and remained intact; the exact Response 69 baseline was never edited.",
+            "recovery_action":"Embedded the manifest as a JSON string literal and parsed it with json.loads inside the generated apply utility.",
+            "validation_result":"The clean-apply utility reconstructed the exact baseline, applied every overlay identity, verified critical hashes, SQLite integrity, foreign keys, Response 70, release-governance tables, and both read-only application audits.",
+            "data_quality_effect":"None; manifest content and overlay identities were unchanged.",
+            "next_checkpoint":"Complete final package verification and current-turn transport delivery.",
+        }
+        recovery_events=[inspection_event,capabilities_event,evidence_event,release_governance_event,app_event,package_event,marker_gate_event,integration_anchor_event,uppercase_label_event,application_audit_escape_event,release_audit_sql_event,baseline_report_event,qa_report_event,clean_apply_manifest_event]
 '''
-    text = replace_once(text, anchor, block, "Recovery Events 136-137")
-    applied.append("Recovery Events 136-137")
+    text = replace_once(text, anchor, block, "Recovery Events 136-138")
+    applied.append("Recovery Events 136-138")
 
 required = [
     "for label, value, status in [",
     "for area, result, status in [",
+    new_manifest,
     "cells[2].text = status",
     "cells[2].text = status.upper()",
-    "RECOVERY_EVENTS_125_137.json",
+    "RECOVERY_EVENTS_125_138.json",
     "V3-CP4-S3-REC-BASELINE-REPORT-ROW-CONTRACT-CORRECTED",
     "V3-CP4-S3-REC-QA-REPORT-ROW-CONTRACT-CORRECTED",
+    "V3-CP4-S3-REC-CLEAN-APPLY-MANIFEST-JSON-PARSED",
 ]
 missing = [marker for marker in required if marker not in text]
 if missing:
-    raise SystemExit({"missing_report_fix_markers": missing})
+    raise SystemExit({"missing_report_or_manifest_fix_markers": missing})
 
 if text != original:
     TARGET.write_text(text, encoding="utf-8")
