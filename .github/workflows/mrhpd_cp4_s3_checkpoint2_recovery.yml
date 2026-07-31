@@ -76,14 +76,17 @@ jobs:
           python mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py | tee checkpoint1-builder-report-fix.log
           python -m py_compile mrhpd/cp4/session3/checkpoint1/build_checkpoint1_recovery.py
 
-      - name: Generate, integrate, and compile the Session 3 Checkpoint 2 builder
+      - name: Generate, integrate, recover, and compile the Session 3 Checkpoint 2 builder
         run: |
           set -euo pipefail
           python -m py_compile mrhpd/cp4/session3/checkpoint2/prepare_session3_checkpoint2_builder.py
           python -m py_compile mrhpd/cp4/session3/checkpoint2/session3_checkpoint2_governance.py
           python -m py_compile mrhpd/cp4/session3/checkpoint2/patch_generated_session3_checkpoint2_integration.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint2/recover_sparse_page_gate_and_audit_state.py
           python mrhpd/cp4/session3/checkpoint2/prepare_session3_checkpoint2_builder.py | tee checkpoint2-builder-generation.log
           python mrhpd/cp4/session3/checkpoint2/patch_generated_session3_checkpoint2_integration.py | tee checkpoint2-builder-integration.log
+          python mrhpd/cp4/session3/checkpoint2/recover_sparse_page_gate_and_audit_state.py | tee checkpoint2-recovery-fixes.log
+          python -m py_compile mrhpd/cp4/session3/checkpoint2/session3_checkpoint2_governance.py
           python -m py_compile mrhpd/cp4/session3/checkpoint2/build_checkpoint2_recovery.py
 
       - name: Build Section 4 Session 3 Checkpoint 2 recovery through Response 71
@@ -205,9 +208,11 @@ jobs:
               Path('checkpoint2-build.log'),
               Path('checkpoint2-builder-generation.log'),
               Path('checkpoint2-builder-integration.log'),
+              Path('checkpoint2-recovery-fixes.log'),
               Path('mrhpd/cp4/session3/checkpoint2/prepare_session3_checkpoint2_builder.py'),
               Path('mrhpd/cp4/session3/checkpoint2/session3_checkpoint2_governance.py'),
               Path('mrhpd/cp4/session3/checkpoint2/patch_generated_session3_checkpoint2_integration.py'),
+              Path('mrhpd/cp4/session3/checkpoint2/recover_sparse_page_gate_and_audit_state.py'),
               Path('mrhpd/cp4/session3/checkpoint2/build_checkpoint2_recovery.py'),
               predecessor[0],
           ]
@@ -243,6 +248,7 @@ jobs:
           mkdir -p session3-checkpoint2-failure
           cp -f checkpoint1-builder-*.log session3-checkpoint2-failure/ 2>/dev/null || true
           cp -f checkpoint2-builder-*.log session3-checkpoint2-failure/ 2>/dev/null || true
+          cp -f checkpoint2-recovery-fixes.log session3-checkpoint2-failure/ 2>/dev/null || true
           cp -f checkpoint2-build.log session3-checkpoint2-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session3/checkpoint2/*.py session3-checkpoint2-failure/ 2>/dev/null || true
           find response69_artifacts response70_artifact dist_cp4_s3_cp2 -maxdepth 14 -type f -printf '%p\t%s bytes\n' > session3-checkpoint2-failure/file-inventory.txt 2>/dev/null || true
