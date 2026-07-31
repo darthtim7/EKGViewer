@@ -6,6 +6,11 @@ on:
       - mrhpd-recovery-runner-20260730
     paths:
       - '.github/workflows/mrhpd_public_runner_probe.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_public_runner_probe.yml'
   workflow_dispatch:
 
 permissions:
