@@ -1,0 +1,258 @@
+name: MRHPD Section 4 Session 3 Checkpoint 2 recovery
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_cp4_s3_checkpoint2_recovery.yml'
+      - 'mrhpd/cp4/session3/checkpoint1/**'
+      - 'mrhpd/cp4/session3/checkpoint2/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-checkpoint-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deterministic document, workbook, PDF, and rendering dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 pypdf==5.9.0 pymupdf==1.26.4
+
+      - name: Download Response 69 complete restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-69-Complete-Restore-Volume-1-of-2-v2
+          path: response69_artifacts/volume1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30635835617
+
+      - name: Download Response 69 complete restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-69-Complete-Restore-Volume-2-of-2-v2
+          path: response69_artifacts/volume2
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30635835617
+
+      - name: Download verified Response 70 Checkpoint 1 recovery delivery
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-70-Checkpoint-1-Recovery-Delivery
+          path: response70_artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30644567662
+
+      - name: Recreate the clean-verified Session 3 Checkpoint 1 builder
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/prepare_session3_checkpoint1_builder.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/relax_generated_integration_patcher.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/normalize_generated_session3_builder.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/session3_release_governance.py
+          python mrhpd/cp4/session3/checkpoint1/prepare_session3_checkpoint1_builder.py | tee checkpoint1-builder-generation.log
+          python mrhpd/cp4/session3/checkpoint1/relax_generated_integration_patcher.py | tee checkpoint1-patcher-relaxation.log
+          python mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py | tee checkpoint1-builder-integration.log
+          python mrhpd/cp4/session3/checkpoint1/normalize_generated_session3_builder.py | tee checkpoint1-builder-normalization.log
+          python mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py | tee checkpoint1-builder-report-fix.log
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/build_checkpoint1_recovery.py
+
+      - name: Generate, integrate, and compile the Session 3 Checkpoint 2 builder
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp4/session3/checkpoint2/prepare_session3_checkpoint2_builder.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint2/session3_checkpoint2_governance.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint2/patch_generated_session3_checkpoint2_integration.py
+          python mrhpd/cp4/session3/checkpoint2/prepare_session3_checkpoint2_builder.py | tee checkpoint2-builder-generation.log
+          python mrhpd/cp4/session3/checkpoint2/patch_generated_session3_checkpoint2_integration.py | tee checkpoint2-builder-integration.log
+          python -m py_compile mrhpd/cp4/session3/checkpoint2/build_checkpoint2_recovery.py
+
+      - name: Build Section 4 Session 3 Checkpoint 2 recovery through Response 71
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session3/checkpoint2/build_checkpoint2_recovery.py \
+            --response69-dir response69_artifacts \
+            --response70-dir response70_artifact \
+            --dist dist_cp4_s3_cp2 | tee checkpoint2-build.log
+
+      - name: Verify Checkpoint 2 recovery outputs
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, json, re, zipfile
+
+          def sha(path):
+              h=hashlib.sha256()
+              with path.open('rb') as handle:
+                  for block in iter(lambda:handle.read(1024*1024),b''):
+                      h.update(block)
+              return h.hexdigest()
+
+          def verify_zip(path):
+              with zipfile.ZipFile(path) as zf:
+                  assert zf.testzip() is None
+                  names=zf.namelist()
+                  assert len(names)==len(set(names))
+                  for name in names:
+                      p=PurePosixPath(name.replace('\\','/'))
+                      assert not p.is_absolute() and '..' not in p.parts and not re.match(r'^[A-Za-z]:',name), name
+
+          d=Path('dist_cp4_s3_cp2')
+          recovery=list(d.glob('*RECOVERY DATA THROUGH RESPONSE 71*.zip'))
+          assert len(recovery)==1, recovery
+          recovery=recovery[0]
+          verify_zip(recovery)
+          verification=json.loads((d/'MRHPD v3.0.0a Response 71 Checkpoint 2 Recovery Verification.json').read_text())
+          summary=json.loads((d/'MRHPD_RESPONSE71_CHECKPOINT2_BUILD_SUMMARY.json').read_text())
+          assert verification['status']=='passed'
+          assert verification['accepted_predecessor_mutated'] is False
+          assert verification['checkpoint_2_of_3_complete'] is True
+          assert verification['session_3_of_3_complete'] is False
+          assert verification['remediation_section_4_complete'] is False
+          assert verification['clean_apply']=='passed'
+          assert summary['status']=='passed'
+          assert summary['database']['integrity']=='ok'
+          assert summary['database']['foreign_key_violations']==0
+          assert summary['database']['response71_records']==1
+          assert summary['database']['field_coverage_failures']==0
+          assert summary['database']['query_coverage_failures']==0
+          assert summary['database']['source_governance_failures']==0
+          assert summary['database']['drift_resolution_failures']==0
+          assert summary['database']['table_count']>=205
+          assert summary['workbook']['status']=='passed'
+          assert summary['workbook']['current_sheet_count']>=70
+          assert summary['workbook']['formula_error_count']==0
+          assert summary['application']['status']=='passed'
+          assert summary['application']['main_application_unchanged'] is True
+          assert summary['publication']['status']=='passed'
+          assert summary['publication']['publication_pages']==537
+          assert summary['publication']['searchable_pages']==537
+          assert summary['field_coverage']['status']=='passed'
+          assert summary['field_coverage']['audited_fields']>0
+          assert summary['query_coverage']['status']=='passed'
+          assert summary['query_coverage']['queries']>=21
+          assert summary['source_governance']['status']=='passed'
+          assert summary['source_governance']['audited_tables']>0
+          assert summary['project_diff']['status']=='passed'
+          assert summary['project_diff']['deleted_count']==0
+          assert summary['project_diff']['prohibited_drift_count']==0
+          rc=summary['release_candidate']
+          assert rc['status']=='passed'
+          assert rc['source_version_sweep']['status']=='passed'
+          assert rc['source_version_sweep']['sources']>=10
+          assert rc['publication_page_qa']['status']=='passed'
+          assert rc['publication_page_qa']['page_count']==537
+          assert rc['publication_page_qa']['failed_pages']==0
+          assert rc['graphics_release_audit']['status']=='passed'
+          assert rc['graphics_release_audit']['total_assets']>=100
+          assert rc['cross_artifact_drift']['status']=='passed'
+          assert rc['cross_artifact_drift']['domains']>=14
+          assert rc['application_audit']['status']=='passed'
+          assert summary['indexes']['bit_index_integrity']=='ok'
+          assert summary['manifest']['mismatches']==0
+          assert recovery.stat().st_size < 104_857_600
+          print(json.dumps({
+              'status':'passed',
+              'recovery':{'name':recovery.name,'bytes':recovery.stat().st_size,'sha256':sha(recovery)},
+              'database_tables':summary['database']['table_count'],
+              'workbook_sheets':summary['workbook']['current_sheet_count'],
+              'audited_fields':summary['field_coverage']['audited_fields'],
+              'queries':summary['query_coverage']['queries'],
+              'source_controls':rc['source_version_sweep']['sources'],
+              'publication_pages':rc['publication_page_qa']['page_count'],
+              'graphics_assets':rc['graphics_release_audit']['total_assets'],
+              'drift_domains':rc['cross_artifact_drift']['domains'],
+              'next':summary['next'],
+          },indent=2))
+          PY
+
+      - name: Build current-turn delivery wrapper
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import json, re, zipfile
+          d=Path('dist_cp4_s3_cp2')
+          recovery=list(d.glob('*RECOVERY DATA THROUGH RESPONSE 71*.zip'))
+          assert len(recovery)==1
+          predecessor=list(Path('response70_artifact').rglob('*.zip'))
+          assert len(predecessor)==1, predecessor
+          files=[
+              recovery[0],
+              d/f'{recovery[0].name}.sha256.txt',
+              d/'MRHPD v3.0.0a Response 71 Checkpoint 2 Recovery Verification.json',
+              d/'MRHPD_RESPONSE71_CHECKPOINT2_BUILD_SUMMARY.json',
+              Path('checkpoint2-build.log'),
+              Path('checkpoint2-builder-generation.log'),
+              Path('checkpoint2-builder-integration.log'),
+              Path('mrhpd/cp4/session3/checkpoint2/prepare_session3_checkpoint2_builder.py'),
+              Path('mrhpd/cp4/session3/checkpoint2/session3_checkpoint2_governance.py'),
+              Path('mrhpd/cp4/session3/checkpoint2/patch_generated_session3_checkpoint2_integration.py'),
+              Path('mrhpd/cp4/session3/checkpoint2/build_checkpoint2_recovery.py'),
+              predecessor[0],
+          ]
+          missing=[str(path) for path in files if not path.exists()]
+          assert not missing, missing
+          wrapper=d/'MRHPD v3.0.0a Response 71 Checkpoint 2 Recovery Delivery.zip'
+          with zipfile.ZipFile(wrapper,'w',compression=zipfile.ZIP_STORED,allowZip64=True) as zf:
+              for path in files:
+                  zf.write(path,path.name)
+          with zipfile.ZipFile(wrapper) as zf:
+              assert zf.testzip() is None
+              names=zf.namelist()
+              assert len(names)==len(set(names))
+              for name in names:
+                  p=PurePosixPath(name.replace('\\','/'))
+                  assert not p.is_absolute() and '..' not in p.parts and not re.match(r'^[A-Za-z]:',name), name
+          assert wrapper.stat().st_size < 104_857_600
+          print(json.dumps({'wrapper':wrapper.name,'bytes':wrapper.stat().st_size,'members':len(files)},indent=2))
+          PY
+
+      - name: Upload Checkpoint 2 recovery delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-71-Checkpoint-2-Recovery-Delivery
+          path: dist_cp4_s3_cp2/MRHPD v3.0.0a Response 71 Checkpoint 2 Recovery Delivery.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p session3-checkpoint2-failure
+          cp -f checkpoint1-builder-*.log session3-checkpoint2-failure/ 2>/dev/null || true
+          cp -f checkpoint2-builder-*.log session3-checkpoint2-failure/ 2>/dev/null || true
+          cp -f checkpoint2-build.log session3-checkpoint2-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session3/checkpoint2/*.py session3-checkpoint2-failure/ 2>/dev/null || true
+          find response69_artifacts response70_artifact dist_cp4_s3_cp2 -maxdepth 14 -type f -printf '%p\t%s bytes\n' > session3-checkpoint2-failure/file-inventory.txt 2>/dev/null || true
+          printf 'The Response 69 restore, Response 70 recovery, accepted predecessor, frozen Section 3 release, 537-page publication, editable assembly, and main application source were never modified in place.\n' > session3-checkpoint2-failure/RECOVERY_NOTICE.txt
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Response-71-Checkpoint-2-Failure-Diagnostics
+          path: session3-checkpoint2-failure/
+          if-no-files-found: warn
+          retention-days: 90
