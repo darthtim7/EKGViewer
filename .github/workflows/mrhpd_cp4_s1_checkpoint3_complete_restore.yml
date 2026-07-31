@@ -1,0 +1,159 @@
+name: MRHPD Section 4 Session 1 Checkpoint 3 complete restore
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_cp4_s1_checkpoint3_complete_restore.yml'
+      - 'mrhpd/cp4/session1/checkpoint3/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-session-complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deterministic document, workbook and PDF dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 pypdf==5.9.0
+
+      - name: Download verified complete restore through Response 64
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Complete-Restore-Through-Response-64
+          path: base_r64
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30602780836
+
+      - name: Download verified Checkpoint 2 recovery through Response 65
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-65-Checkpoint-2-Recovery-Data
+          path: checkpoint2_artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30605460473
+
+      - name: Compile Session 1 completion builder
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp4/session1/checkpoint3/build_session1_complete_restore.py
+
+      - name: Build complete Session 1 restore through Response 66
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session1/checkpoint3/build_session1_complete_restore.py \
+            --base-dir base_r64 \
+            --checkpoint2-dir checkpoint2_artifact \
+            --dist dist_cp4_s1_cp3 | tee checkpoint3-build.log
+
+      - name: Verify Session 1 outputs
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json, zipfile
+          d=Path('dist_cp4_s1_cp3')
+          volumes=sorted(d.glob('*Response 66 Complete Restore Drive Volume * of 2.zip'))
+          assert len(volumes)==2, volumes
+          assert all(p.stat().st_size < 104_857_600 for p in volumes)
+          controls=d/'MRHPD v3.0.0a Response 66 Final Verification and Controls.zip'
+          assert controls.exists(), controls
+          verification=json.loads((d/'MRHPD v3.0.0a Response 66 Complete Restore Verification.json').read_text())
+          summary=json.loads((d/'MRHPD_RESPONSE66_SESSION1_COMPLETE_BUILD_SUMMARY.json').read_text())
+          assert verification['status']=='passed'
+          assert verification['accepted_predecessor_mutated'] is False
+          assert verification['checkpoint_3_of_3_complete'] is True
+          assert verification['session_1_of_3_complete'] is True
+          assert verification['remediation_section_4_complete'] is False
+          assert verification['self_contained'] is True
+          assert verification['requires_other_project_files'] is False
+          assert verification['requires_conversation_reconstruction'] is False
+          assert summary['status']=='passed'
+          assert summary['database']['integrity']=='ok'
+          assert summary['database']['foreign_key_violations']==0
+          assert summary['workbook']['status']=='passed'
+          assert summary['application']['status']=='passed'
+          assert summary['publication']['status']=='passed'
+          assert summary['indexes']['bit_index_integrity']=='ok'
+          for path in [*volumes, controls]:
+              with zipfile.ZipFile(path) as zf:
+                  assert zf.testzip() is None
+                  names=zf.namelist()
+                  assert len(names)==len(set(names))
+          print(json.dumps({
+              'volumes': [{'name':p.name,'bytes':p.stat().st_size} for p in volumes],
+              'controls': {'name':controls.name,'bytes':controls.stat().st_size},
+              'restore': verification['restore'],
+              'project_snapshot': verification['project_snapshot'],
+              'next': verification['next'],
+          }, indent=2))
+          PY
+
+      - name: Upload complete restore volume 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-66-Complete-Restore-Volume-1-of-2
+          path: dist_cp4_s1_cp3/*Response 66 Complete Restore Drive Volume 1 of 2.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload complete restore volume 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-66-Complete-Restore-Volume-2-of-2
+          path: dist_cp4_s1_cp3/*Response 66 Complete Restore Drive Volume 2 of 2.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload verification, reports and controls
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-66-Final-Verification-and-Controls
+          path: |
+            dist_cp4_s1_cp3/MRHPD v3.0.0a Response 66 Final Verification and Controls.zip
+            dist_cp4_s1_cp3/MRHPD v3.0.0a Response 66 Complete Restore Verification.json
+            dist_cp4_s1_cp3/MRHPD_RESPONSE66_SESSION1_COMPLETE_BUILD_SUMMARY.json
+            dist_cp4_s1_cp3/*COMPLETE RESTORE THROUGH RESPONSE 66*.sha256.txt
+            dist_cp4_s1_cp3/MRHPD_RESPONSE66_COMPLETE_RESTORE_TRANSPORT_MANIFEST.json
+            dist_cp4_s1_cp3/reassemble_response66_complete_restore.py
+            checkpoint3-build.log
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p checkpoint3-failure
+          cp -f checkpoint3-build.log checkpoint3-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session1/checkpoint3/build_session1_complete_restore.py checkpoint3-failure/ 2>/dev/null || true
+          find base_r64 checkpoint2_artifact dist_cp4_s1_cp3 -maxdepth 6 -type f -printf '%p\t%s bytes\n' > checkpoint3-failure/file-inventory.txt 2>/dev/null || true
+          printf 'The accepted predecessor, frozen Section 3 release, Response 64 restore, and Response 65 Checkpoint 2 recovery package were never modified in place.\n' > checkpoint3-failure/RECOVERY_NOTICE.txt
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Response-66-Session-1-Completion-Failure-Diagnostics
+          path: checkpoint3-failure/
+          if-no-files-found: warn
+          retention-days: 90
