@@ -354,14 +354,17 @@ def compact_superseded_session2_derivatives(project: Path, canonical_db: Path, c
         "frozen_section3_release_mutated": False,
     }
     json_write(register_dir / "SESSION_END_COMPACTION_REGISTER.json", result)
-    text_write(register_dir / "SESSION_END_COMPACTION_REGISTER.md", f"""# Section 4 Session 2 session-end derivative compaction
-
-Removed artifacts: {result['removed_count']}
-
-Removed physical bytes: {result['removed_bytes']}
-
-Only superseded Session 2 checkpoint database/workbook snapshots and reconstructible prior index, manifest, or render-QA derivatives were removed. The current canonical database and workbook were verified as supersets before removal. Clinical data, sources, reports, tracking, recovery history, publication, editable assembly, application source, accepted predecessor, and frozen Section 3 release remain intact.
-""")
+    compaction_markdown = (
+        "# Section 4 Session 2 session-end derivative compaction\n\n"
+        f"Removed artifacts: {result['removed_count']}\n\n"
+        f"Removed physical bytes: {result['removed_bytes']}\n\n"
+        "Only superseded Session 2 checkpoint database/workbook snapshots and reconstructible prior index, "
+        "manifest, or render-QA derivatives were removed. The current canonical database and workbook were "
+        "verified as supersets before removal. Clinical data, sources, reports, tracking, recovery history, "
+        "publication, editable assembly, application source, accepted predecessor, and frozen Section 3 release "
+        "remain intact.\n"
+    )
+    text_write(register_dir / "SESSION_END_COMPACTION_REGISTER.md", compaction_markdown)
     return result
 """
 
