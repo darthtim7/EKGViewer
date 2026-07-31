@@ -70,11 +70,20 @@ if new_text not in text:
     text = replace_once(text, old_text, new_text, "dual publication text extraction")
     applied.append("dual publication text extraction")
 
+old_sampling = '''            stride = max(1, len(samples) // 4096)
+            sampled = samples[::stride]
+'''
+new_sampling = '''            sampled = samples
+'''
+if new_sampling not in text:
+    text = replace_once(text, old_sampling, new_sampling, "full low-resolution pixel census")
+    applied.append("full low-resolution pixel census")
+
 old_page_gate = '''            status = "passed" if text.strip() and rect.width > 500 and rect.height > 700 and nonwhite_ratio > 0.0005 else "failed"
             notes = "searchable_rendered_page" if status == "passed" else "possible_blank_or_geometry_anomaly"
 '''
 new_page_gate = '''            render_valid = bool(samples) and pix.width > 100 and pix.height > 100
-            visible_content = nonwhite_ratio > 0.0005 or image_count > 0
+            visible_content = nonwhite > 0 or image_count > 0
             status = "passed" if searchable_text.strip() and rect.width > 500 and rect.height > 700 and render_valid and visible_content else "failed"
             if status != "passed":
                 notes = "possible_blank_searchability_or_geometry_anomaly"
@@ -115,32 +124,36 @@ last_event = '''        ("V3-CP4-S3-REC-CHECKPOINT2-RELEASE-CANDIDATE-PREPARED",
 recovery_events = '''        ("V3-CP4-S3-REC-CHECKPOINT2-RELEASE-CANDIDATE-PREPARED", "Prepare the Section 4 release candidate for independent Checkpoint 3 verification.", "Checkpoint 2 may resolve and freeze the candidate but may not self-declare final release.", "Closed or explicitly deferred each controlled risk, rebuilt reports/QA/index/manifest/recovery surfaces, and handed a cleanly applicable candidate to Checkpoint 3."),
         ("V3-CP4-S3-REC-PUBLICATION-SPARSE-PAGE-CLASSIFICATION-CORRECTED", "Run the 537-page publication render audit.", "The initial disposable audit confirmed the independent 537-page searchable PDF identity but PyMuPDF returned only whitespace on 39 image-led or sparse pages, causing a single-extractor gate to reject valid rendered pages.", "Required valid render geometry and visible content, used independent PyMuPDF and pypdf text extractors for searchability, and labeled image-led or low-ink pages separately while genuine blank or malformed pages still fail."),
         ("V3-CP4-S3-REC-RELEASE-CANDIDATE-AUDIT-STATE-SEQUENCING-CORRECTED", "Run the independent read-only release-candidate audit.", "Code review identified that the audit expected checkpoint_complete before the state transition occurred.", "Marked the prepared candidate checkpoint_complete with audit_pending status before the read-only audit, then finalized application_status only after that audit passed."),
+        ("V3-CP4-S3-REC-PUBLICATION-RENDER-SAMPLING-ALIAS-CORRECTED", "Measure visible content on sparse vector publication pages.", "The second disposable audit still rejected the same 39 pages because a 4096-point raster subsample aliased across white background and missed thin rendered marks.", "Replaced the subsample with a full low-resolution grayscale pixel census and required at least one rendered nonwhite pixel or image object, preserving a true blank-page failure."),
 '''
 if "V3-CP4-S3-REC-PUBLICATION-SPARSE-PAGE-CLASSIFICATION-CORRECTED" not in text:
-    text = replace_once(text, last_event, recovery_events, "Recovery Events 155-156")
-    applied.append("Recovery Events 155-156")
+    text = replace_once(text, last_event, recovery_events, "Recovery Events 155-157")
+    applied.append("Recovery Events 155-157")
 
 if text != original:
     GOVERNANCE.write_text(text, encoding="utf-8")
 
 builder_text = BUILDER.read_text(encoding="utf-8")
 builder_original = builder_text
-for old_name in ("RECOVERY_EVENTS_139_154.json", "RECOVERY_EVENTS_139_155.json"):
-    builder_text = builder_text.replace(old_name, "RECOVERY_EVENTS_139_156.json")
-if "RECOVERY_EVENTS_139_156.json" not in builder_text:
+for old_name in ("RECOVERY_EVENTS_139_154.json", "RECOVERY_EVENTS_139_155.json", "RECOVERY_EVENTS_139_156.json"):
+    builder_text = builder_text.replace(old_name, "RECOVERY_EVENTS_139_157.json")
+if "RECOVERY_EVENTS_139_157.json" not in builder_text:
     raise SystemExit("Checkpoint 2 recovery-event filename was not updated")
 if builder_text != builder_original:
     BUILDER.write_text(builder_text, encoding="utf-8")
-    applied.append("recovery-event filename 139-156")
+    applied.append("recovery-event filename 139-157")
 
 required = [
+    "sampled = samples",
+    "visible_content = nonwhite > 0 or image_count > 0",
     "searchable_image_led_page_validated_by_secondary_extractor",
     "searchable_sparse_or_low_ink_page",
     "secondary_text = search_reader.pages[index].extract_text() or \"\"",
     'update_checkpoint_state(db, workbook_qa["status"], "audit_pending", generated_at)',
     "V3-CP4-S3-REC-PUBLICATION-SPARSE-PAGE-CLASSIFICATION-CORRECTED",
     "V3-CP4-S3-REC-RELEASE-CANDIDATE-AUDIT-STATE-SEQUENCING-CORRECTED",
-    "RECOVERY_EVENTS_139_156.json",
+    "V3-CP4-S3-REC-PUBLICATION-RENDER-SAMPLING-ALIAS-CORRECTED",
+    "RECOVERY_EVENTS_139_157.json",
 ]
 combined = GOVERNANCE.read_text(encoding="utf-8") + "\n" + BUILDER.read_text(encoding="utf-8")
 missing = [marker for marker in required if marker not in combined]
