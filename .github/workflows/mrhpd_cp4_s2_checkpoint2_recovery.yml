@@ -59,9 +59,15 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30620372689
 
-      - name: Compile Checkpoint 2 builder
+      - name: Apply recoverable generated-audit correction
         run: |
           set -euo pipefail
+          python mrhpd/cp4/session2/checkpoint2/patch_generated_audit_newline_and_recovery_event.py
+
+      - name: Compile Checkpoint 2 builder and recovery patch
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp4/session2/checkpoint2/patch_generated_audit_newline_and_recovery_event.py
           python -m py_compile mrhpd/cp4/session2/checkpoint2/build_checkpoint2_recovery.py
 
       - name: Build Section 4 Session 2 Checkpoint 2 recovery through Response 68
@@ -180,6 +186,7 @@ jobs:
           mkdir -p checkpoint2-failure
           cp -f checkpoint2-build.log checkpoint2-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session2/checkpoint2/build_checkpoint2_recovery.py checkpoint2-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session2/checkpoint2/patch_generated_audit_newline_and_recovery_event.py checkpoint2-failure/ 2>/dev/null || true
           find response66_artifacts response67_artifact dist_cp4_s2_cp2 -maxdepth 10 -type f -printf '%p\t%s bytes\n' > checkpoint2-failure/file-inventory.txt 2>/dev/null || true
           printf 'The Response 66 restore, Response 67 recovery, frozen Section 3 release, accepted predecessor, 537-page publication, editable assembly, and main application source were never modified in place.\n' > checkpoint2-failure/RECOVERY_NOTICE.txt
 
