@@ -8,6 +8,7 @@ on:
       - '.github/workflows/mrhpd_checkpoint21_complete_restore.yml'
       - 'mrhpd/cp3/session4/checkpoint21/build_complete_restore.py'
       - 'mrhpd/cp3/session4/checkpoint21/patch_legacy_exports.py'
+      - 'mrhpd/cp3/session4/checkpoint21/patch_response_defaults.py'
   workflow_dispatch:
 
 permissions:
@@ -19,15 +20,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      MRHPD_SOURCE_URL: 'https://sdmntprwestus2.oaiusercontent.com/files/00000000-4720-81f8-a606-73aa97e561b5/raw?se=2026-07-31T02:13:11Z&sp=r&sv=2026-02-06&sr=b&scid=29e41538-7af8-5b63-a1b2-91e676f326c8&skoid=de71a0d5-fb02-4fce-be69-9296aced242b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-07-30T23:22:09Z&ske=2026-08-01T23:22:09Z&sks=b&skv=2026-02-06&sig=MojIgRSqyO/gCG%2BXESQr3w8KAHYYzZyOr62qa%2B0%2B9xQ%3D'
+      MRHPD_SOURCE_URL: 'https://sdmntprwestus2.oaiusercontent.com/files/00000000-4f84-81f8-a3da-8308cd313d0d/raw?se=2026-07-31T02:16:13Z&sp=r&sv=2026-02-06&sr=b&scid=68f3bc38-dc88-52e3-8815-f304219d5cb6&skoid=de71a0d5-fb02-4fce-be69-9296aced242b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-07-31T02:08:12Z&ske=2026-08-02T02:08:12Z&sks=b&skv=2026-02-06&sig=WaZDsN/JnpjCnsdmw0PngaS2xDqwuwjK3oBZ7V9w3IM%3D'
     steps:
       - name: Check out isolated recovery branch
         uses: actions/checkout@v4
 
-      - name: Install deterministic repair layer for legacy Drive text exports
+      - name: Install deterministic repair layers
         run: |
           set -euo pipefail
           python3 mrhpd/cp3/session4/checkpoint21/patch_legacy_exports.py \
+            mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
+          python3 mrhpd/cp3/session4/checkpoint21/patch_response_defaults.py \
             mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
 
       - name: Execute deterministic Checkpoint 21 finalization and complete restore build
