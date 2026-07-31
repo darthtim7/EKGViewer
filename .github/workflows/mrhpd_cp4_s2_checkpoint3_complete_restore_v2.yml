@@ -70,11 +70,13 @@ jobs:
             --recovery-output response68_recovery_input \
             --work prepared_input_work | tee input-preparation.log
 
-      - name: Generate and compile the Session 2 complete-restore builder
+      - name: Generate, normalize, and compile the Session 2 complete-restore builder
         run: |
           set -euo pipefail
           python mrhpd/cp4/session2/checkpoint3/prepare_session2_complete_builder.py
+          python mrhpd/cp4/session2/checkpoint3/patch_generated_summary_and_event124.py
           python -m py_compile mrhpd/cp4/session2/checkpoint3/prepare_session2_complete_builder.py
+          python -m py_compile mrhpd/cp4/session2/checkpoint3/patch_generated_summary_and_event124.py
           python -m py_compile mrhpd/cp4/session2/checkpoint3/build_session2_complete_restore.py
 
       - name: Build Checkpoint 3 and the complete Session 2 restore through Response 69
@@ -225,6 +227,7 @@ jobs:
           cp -f session2-complete-build.log session2-complete-failure-v2/ 2>/dev/null || true
           cp -f mrhpd/cp4/session2/checkpoint3/prepare_session2_inputs.py session2-complete-failure-v2/ 2>/dev/null || true
           cp -f mrhpd/cp4/session2/checkpoint3/prepare_session2_complete_builder.py session2-complete-failure-v2/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session2/checkpoint3/patch_generated_summary_and_event124.py session2-complete-failure-v2/ 2>/dev/null || true
           cp -f mrhpd/cp4/session2/checkpoint3/build_session2_complete_restore.py session2-complete-failure-v2/ 2>/dev/null || true
           find response66_artifacts response68_artifact response68_recovery_input base_r66 dist_cp4_s2_cp3 -maxdepth 12 -type f -printf '%p\t%s bytes\n' > session2-complete-failure-v2/file-inventory.txt 2>/dev/null || true
           printf 'The Response 66 restore, Response 68 recovery, accepted predecessor, frozen Section 3 release, 537-page publication, editable assembly, and main application source were never modified in place.\n' > session2-complete-failure-v2/RECOVERY_NOTICE.txt
