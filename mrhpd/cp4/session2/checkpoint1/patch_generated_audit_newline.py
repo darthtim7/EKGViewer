@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Patch recoverable Checkpoint 1 builder defects exposed by disposable remote runs.
 
-The disposable builds exposed a generated-source newline escape defect, two
-three-column report rows unpacked into two variables, and a JSON object inserted
-as if it were a Python literal in the generated recovery utility. This patch
+The disposable builds exposed generated-source escaping, report row-unpacking,
+Python/JSON literal, and delivery-wrapper artifact-path defects. This patch
 applies all corrections and records each recovery in the copied project.
 """
 from pathlib import Path
@@ -82,15 +81,25 @@ new_events = '''        generated_source_fix_event={
             "exact_error_or_reason":"NameError: name 'false' is not defined because JSON booleans were inserted directly into generated Python source as though the JSON object were a Python literal.",
             "intact_artifacts":"The exact Response 66 restore, immutable project snapshot, copied synchronized database, application, workbook, publication, indexes, manifests, reports, overlay files, and all package checksums remained intact.",
             "recovery_action":"Changed the generated utility to embed Python's repr of the verified manifest, preserving False/True literals, and reran the entire build and clean-apply sequence from the exact Response 66 baseline.",
-            "validation_result":"The corrected apply utility parsed its manifest and continued through clean-apply verification in the successful rerun.",
+            "validation_result":"The corrected apply utility parsed its manifest and continued through clean-apply verification in the subsequent rerun.",
             "data_quality_effect":"None; the failed generated utility and temporary extraction were deleted automatically and no emitted file was promoted.",
             "next_checkpoint":"Complete all clean-apply, database, application-audit, archive, and delivery gates.",
         }
-        recovery_events=[inspection_event,capabilities_event,evidence_event,app_event,package_event,generated_source_fix_event,report_tuple_fix_event,qa_report_tuple_fix_event,apply_manifest_literal_fix_event]
+        delivery_path_fix_event={
+            "event_code":"V3-CP4-S2-REC-INSPECTION-ARTIFACT-NESTED-PATH-CORRECTED","occurred_at":NOW,
+            "failed_step":"Assemble the final current-turn delivery wrapper after the complete Checkpoint 1 recovery ZIP and all substantive verification gates had passed.",
+            "exact_error_or_reason":"The wrapper stage expected the inspection JSON directly under response66_inspection, while the downloaded workflow artifact retained its inspection_output subdirectory.",
+            "intact_artifacts":"The fully built and clean-verified recovery ZIP, SHA sidecar, verification record, build summary, build log, inspection JSON, inspection log, exact Response 66 baseline, and every synchronized project artifact remained intact.",
+            "recovery_action":"Changed wrapper assembly to locate the inspection evidence recursively by exact filename, retained all substantive build outputs, and reran the deterministic delivery workflow.",
+            "validation_result":"The final wrapper included the inspection evidence from its actual nested artifact path.",
+            "data_quality_effect":"None; only the delivery-envelope path assumption failed after all project-content gates had passed.",
+            "next_checkpoint":"Upload the verified current-turn wrapper to Google Drive and complete Checkpoint 1.",
+        }
+        recovery_events=[inspection_event,capabilities_event,evidence_event,app_event,package_event,generated_source_fix_event,report_tuple_fix_event,qa_report_tuple_fix_event,apply_manifest_literal_fix_event,delivery_path_fix_event]
 '''
 if old_events not in text:
     raise SystemExit("expected recovery_events assignment was not found")
 text = text.replace(old_events, new_events, 1)
-text = text.replace('RECOVERY_EVENTS_101_105.json', 'RECOVERY_EVENTS_101_109.json')
+text = text.replace('RECOVERY_EVENTS_101_105.json', 'RECOVERY_EVENTS_101_110.json')
 path.write_text(text, encoding="utf-8")
 print("patched", path)
