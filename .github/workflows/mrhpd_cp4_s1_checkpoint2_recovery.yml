@@ -41,7 +41,7 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30602780836
 
-      - name: Normalize transported builder source and compile
+      - name: Normalize transported builder source, repair schema-aware upsert, and compile
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -49,8 +49,14 @@ jobs:
           p=Path('mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py')
           lines=p.read_text(encoding='utf-8').splitlines(keepends=True)
           changed=sum(1 for line in lines if line.startswith('+'))
-          p.write_text(''.join(line[1:] if line.startswith('+') else line for line in lines),encoding='utf-8')
-          print({'normalized_leading_plus_lines':changed,'path':str(p)})
+          text=''.join(line[1:] if line.startswith('+') else line for line in lines)
+          old='''    columns = table_columns(con, table)\n    values = {name: value for name, value in row.items() if name in columns and not name.endswith("_id")}\n'''
+          new='''    info = list(con.execute(f'PRAGMA table_info("{table}")'))\n    columns = [row[1] for row in info]\n    pk_columns = {row[1] for row in info if row[5]}\n    values = {name: value for name, value in row.items() if name in columns and name not in pk_columns}\n'''
+          if old not in text:
+              raise SystemExit('Expected faulty upsert helper was not found; refusing an unverified patch')
+          text=text.replace(old,new,1)
+          p.write_text(text,encoding='utf-8')
+          print({'normalized_leading_plus_lines':changed,'schema_aware_upsert_patch':'applied','path':str(p)})
           PY
           python -m py_compile mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py
 
