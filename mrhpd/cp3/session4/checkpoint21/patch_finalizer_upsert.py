@@ -16,9 +16,10 @@ def main() -> None:
     new = '''    repair_wrapped_python(finalizer)
     repaired_finalizer = finalizer.read_text(encoding="utf-8")
     buggy_filter = '    values = {k: v for k, v in row.items() if k in columns and not k.endswith("_id")}'
-    fixed_filter = '''\
-    primary_keys = {info[1] for info in con.execute(f'PRAGMA table_info("{table}")') if info[5]}
-    values = {k: v for k, v in row.items() if k in columns and k not in primary_keys}'''
+    fixed_filter = (
+        '    primary_keys = {info[1] for info in con.execute(f\\'PRAGMA table_info("{table}")\\') if info[5]}\\n'
+        '    values = {k: v for k, v in row.items() if k in columns and k not in primary_keys}'
+    )
     if buggy_filter not in repaired_finalizer:
         raise RuntimeError("Recovered finalizer upsert filter was not found")
     finalizer.write_text(repaired_finalizer.replace(buggy_filter, fixed_filter, 1), encoding="utf-8", newline="\\n")
