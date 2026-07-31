@@ -46,6 +46,7 @@ jobs:
           set -euo pipefail
           python mrhpd/cp4/session1/checkpoint2/prepare_checkpoint2_builder.py
           python mrhpd/cp4/session1/checkpoint2/add_checkpoint2_application_aggregate.py
+          python mrhpd/cp4/session1/checkpoint2/add_checkpoint2_recovery_failures.py
           python -m py_compile mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py
 
       - name: Build synchronized Checkpoint 2 recovery data
@@ -72,8 +73,10 @@ jobs:
           assert summary['full_restore_due_this_checkpoint'] is False
           assert verification['qa']['database']['integrity']=='ok'
           assert verification['qa']['database']['foreign_key_violations']==0
+          assert verification['qa']['database']['recovery_event_records']>=57
           assert verification['qa']['workbook']['status']=='passed'
           assert verification['qa']['application']['status']=='passed'
+          assert verification['qa']['application']['test_count']==162
           assert verification['qa']['publication']['status']=='passed'
           with zipfile.ZipFile(archives[0]) as zf:
               assert zf.testzip() is None
@@ -82,6 +85,7 @@ jobs:
               assert 'RESTORE_READ_FIRST.md' in names
               assert 'TOOLS/apply_checkpoint_recovery.py' in names
               assert 'CHECKPOINT_RECOVERY_MANIFEST.json' in names
+              assert any(name.endswith('RECOVERY_EVENTS_85_94.json') for name in names)
           print(json.dumps({
               'archive':archives[0].name,
               'bytes':archives[0].stat().st_size,
@@ -115,6 +119,7 @@ jobs:
           cp -f mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py checkpoint2-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session1/checkpoint2/prepare_checkpoint2_builder.py checkpoint2-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session1/checkpoint2/add_checkpoint2_application_aggregate.py checkpoint2-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session1/checkpoint2/add_checkpoint2_recovery_failures.py checkpoint2-failure/ 2>/dev/null || true
           find base_r64 dist_cp4_s1_cp2 -maxdepth 5 -type f -printf '%p\t%s bytes\n' > checkpoint2-failure/file-inventory.txt 2>/dev/null || true
           printf 'The accepted predecessor, frozen Section 3 release, and Complete Restore Through Response 64 were never modified in place.\n' > checkpoint2-failure/RECOVERY_NOTICE.txt
 
