@@ -45,6 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           python mrhpd/cp4/session1/checkpoint2/prepare_checkpoint2_builder.py
+          python mrhpd/cp4/session1/checkpoint2/add_checkpoint2_application_aggregate.py
           python -m py_compile mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py
 
       - name: Build synchronized Checkpoint 2 recovery data
@@ -113,6 +114,7 @@ jobs:
           cp -f checkpoint2-build.log checkpoint2-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py checkpoint2-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session1/checkpoint2/prepare_checkpoint2_builder.py checkpoint2-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session1/checkpoint2/add_checkpoint2_application_aggregate.py checkpoint2-failure/ 2>/dev/null || true
           find base_r64 dist_cp4_s1_cp2 -maxdepth 5 -type f -printf '%p\t%s bytes\n' > checkpoint2-failure/file-inventory.txt 2>/dev/null || true
           printf 'The accepted predecessor, frozen Section 3 release, and Complete Restore Through Response 64 were never modified in place.\n' > checkpoint2-failure/RECOVERY_NOTICE.txt
 
