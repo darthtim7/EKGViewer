@@ -41,7 +41,7 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30602780836
 
-      - name: Normalize transported builder source, repair schema-aware upsert, and compile
+      - name: Normalize and apply verified recovery patches to the builder
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -50,13 +50,26 @@ jobs:
           lines=p.read_text(encoding='utf-8').splitlines(keepends=True)
           changed=sum(1 for line in lines if line.startswith('+'))
           text=''.join(line[1:] if line.startswith('+') else line for line in lines)
-          old='''    columns = table_columns(con, table)\n    values = {name: value for name, value in row.items() if name in columns and not name.endswith("_id")}\n'''
-          new='''    info = list(con.execute(f'PRAGMA table_info("{table}")'))\n    columns = [row[1] for row in info]\n    pk_columns = {row[1] for row in info if row[5]}\n    values = {name: value for name, value in row.items() if name in columns and name not in pk_columns}\n'''
-          if old not in text:
+
+          old_upsert='''    columns = table_columns(con, table)\n    values = {name: value for name, value in row.items() if name in columns and not name.endswith("_id")}\n'''
+          new_upsert='''    info = list(con.execute(f'PRAGMA table_info("{table}")'))\n    columns = [row[1] for row in info]\n    pk_columns = {row[1] for row in info if row[5]}\n    values = {name: value for name, value in row.items() if name in columns and name not in pk_columns}\n'''
+          if old_upsert not in text:
               raise SystemExit('Expected faulty upsert helper was not found; refusing an unverified patch')
-          text=text.replace(old,new,1)
+          text=text.replace(old_upsert,new_upsert,1)
+
+          old_autosize='''    from openpyxl.styles import Alignment\n    for column in ws.columns:\n        letter = column[0].column_letter\n'''
+          new_autosize='''    from openpyxl.styles import Alignment\n    from openpyxl.utils import get_column_letter\n    for column_index, column in enumerate(ws.columns, 1):\n        letter = get_column_letter(column_index)\n'''
+          if old_autosize not in text:
+              raise SystemExit('Expected merged-cell-sensitive autosize helper was not found; refusing an unverified patch')
+          text=text.replace(old_autosize,new_autosize,1)
+
           p.write_text(text,encoding='utf-8')
-          print({'normalized_leading_plus_lines':changed,'schema_aware_upsert_patch':'applied','path':str(p)})
+          print({
+              'normalized_leading_plus_lines':changed,
+              'schema_aware_upsert_patch':'applied',
+              'merged_cell_autosize_patch':'applied',
+              'path':str(p),
+          })
           PY
           python -m py_compile mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py
 
