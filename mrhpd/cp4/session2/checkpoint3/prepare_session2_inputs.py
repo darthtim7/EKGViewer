@@ -116,27 +116,45 @@ def extract_recovery(response68_dir: Path, output_dir: Path) -> Path:
 
 
 def patch_builder_adapter(path: Path = ADAPTER_PATH) -> dict[str, object]:
-    """Correct the nested generated-verifier string without altering governed logic."""
+    """Correct nested generated-source delimiters without altering governed logic."""
     text = path.read_text(encoding="utf-8")
     original = text
-    old_open = "    verifier = f'''#!/usr/bin/env python3\n"
-    new_open = '    verifier = f"""#!/usr/bin/env python3\n'
-    old_close = "\n'''\n    text_write(tools / \"restore_verify_extract.py\", verifier)\n"
-    new_close = '\n"""\n    text_write(tools / "restore_verify_extract.py", verifier)\n'
-    if old_open in text:
-        text = text.replace(old_open, new_open, 1)
-    elif new_open not in text:
-        raise RuntimeError("generated verifier opening delimiter target not found")
-    if old_close in text:
-        text = text.replace(old_close, new_close, 1)
-    elif new_close not in text:
-        raise RuntimeError("generated verifier closing delimiter target not found")
+    replacements = [
+        (
+            "    verifier = f'''#!/usr/bin/env python3\n",
+            '    verifier = f"""#!/usr/bin/env python3\n',
+            "generated verifier opening delimiter",
+        ),
+        (
+            "\n'''\n    text_write(tools / \"restore_verify_extract.py\", verifier)\n",
+            '\n"""\n    text_write(tools / "restore_verify_extract.py", verifier)\n',
+            "generated verifier closing delimiter",
+        ),
+        (
+            "    text_write(reassemble, f'''#!/usr/bin/env python3\n",
+            '    text_write(reassemble, f"""#!/usr/bin/env python3\n',
+            "generated reassembly opening delimiter",
+        ),
+        (
+            "\n''')\n    wrappers=[]\n",
+            '\n""")\n    wrappers=[]\n',
+            "generated reassembly closing delimiter",
+        ),
+    ]
+    applied: list[str] = []
+    for old, new, label in replacements:
+        if old in text:
+            text = text.replace(old, new, 1)
+            applied.append(label)
+        elif new not in text:
+            raise RuntimeError(f"{label} target not found")
     if text != original:
         path.write_text(text, encoding="utf-8")
     return {
         "status": "passed",
         "path": path.as_posix(),
         "patched": text != original,
+        "applied": applied,
         "sha256": sha256_file(path),
     }
 
