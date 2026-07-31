@@ -25,7 +25,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: darthtim7/EKGViewer
           run-id: 30602780836
-      - name: Inspect application database resolution
+      - name: Inspect application and test database resolution
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -53,12 +53,15 @@ jobs:
               lines=app.read_text(encoding='utf-8').splitlines()
               print('APPLICATION_PATH',app)
               print('APPLICATION_LINES',len(lines))
-              print('--- RELEVANT LINES ---')
+              print('--- APPLICATION RELEVANT LINES ---')
               for i,line in enumerate(lines,1):
-                  if re.search(r'(?i)(sqlite|database|db_path|dbfile|connect\(|Path\(__file__\)|environ|getenv)',line):
+                  if re.search(r'(?i)(sqlite|database|db_path|dbfile|connect\(|Path\(__file__\)|environ|getenv|add_argument\("--db")',line):
                       lo=max(1,i-3); hi=min(len(lines),i+3)
                       print(f'@@ {lo}-{hi}')
                       for j in range(lo,hi+1): print(f'{j:04d}: {lines[j-1]}')
-              print('--- FIRST 180 LINES ---')
-              for i,line in enumerate(lines[:180],1): print(f'{i:04d}: {line}')
+              for test in sorted(app.parent.glob('test*.py')):
+                  test_lines=test.read_text(encoding='utf-8').splitlines()
+                  print(f'--- TEST FILE {test.name} ({len(test_lines)} lines) ---')
+                  for i,line in enumerate(test_lines,1):
+                      print(f'{i:04d}: {line}')
           PY
