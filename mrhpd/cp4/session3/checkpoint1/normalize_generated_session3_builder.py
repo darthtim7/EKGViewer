@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 TARGET = Path("mrhpd/cp4/session3/checkpoint1/build_checkpoint1_recovery.py")
+GOVERNANCE = Path("mrhpd/cp4/session3/checkpoint1/session3_release_governance.py")
 
 
 def sha256_file(path: Path) -> str:
@@ -51,10 +53,28 @@ if new_escape not in text:
     text = replace_once(text, old_escape, new_escape, "nested application-audit newline escape")
     applied.append("nested application-audit newline escape")
 
-text = text.replace("RECOVERY_EVENTS_125_130.json", "RECOVERY_EVENTS_125_134.json")
+# The release-readiness audit is also generated from an outer source factory.
+# Parameterize the status comparison so nested quotation cannot terminate the
+# emitted Python f-string.
+governance_text = GOVERNANCE.read_text(encoding="utf-8")
+old_governance = governance_text
+sql_pattern = re.compile(
+    r"^   prior_failures\[table\]=con\.execute\(f'SELECT COUNT\(\*\) FROM .*?\.fetchone\(\)\[0\]$",
+    re.MULTILINE,
+)
+sql_replacement = "   prior_failures[table]=con.execute(f'SELECT COUNT(*) FROM \"{{table}}\" WHERE status!=?', ('passed',)).fetchone()[0]"
+governance_text, sql_count = sql_pattern.subn(sql_replacement, governance_text, count=1)
+if sql_count != 1 and sql_replacement not in governance_text:
+    raise SystemExit({"release_audit_sql_patch_count": sql_count})
+compile(governance_text, str(GOVERNANCE), "exec")
+if governance_text != old_governance:
+    GOVERNANCE.write_text(governance_text, encoding="utf-8")
+    applied.append("parameterized release-readiness prior-failure SQL")
+
+text = text.replace("RECOVERY_EVENTS_125_130.json", "RECOVERY_EVENTS_125_135.json")
 
 anchor = "        recovery_events=[inspection_event,capabilities_event,evidence_event,release_governance_event,app_event,package_event]\n"
-if "V3-CP4-S3-REC-CAPABILITY-AUDIT-NEWLINE-ESCAPE-CORRECTED" not in text:
+if "V3-CP4-S3-REC-RELEASE-AUDIT-SQL-QUOTING-CORRECTED" not in text:
     block = '''        marker_gate_event={
             "event_number":131,
             "event_code":"V3-CP4-S3-REC-GENERATED-MARKER-GATE-CORRECTED","occurred_at":NOW,
@@ -99,19 +119,31 @@ if "V3-CP4-S3-REC-CAPABILITY-AUDIT-NEWLINE-ESCAPE-CORRECTED" not in text:
             "data_quality_effect":"None; the correction affected only generated utility syntax.",
             "next_checkpoint":"Continue release-governance, workbook, publication, tracking, index, manifest, recovery-overlay, and clean-apply gates.",
         }
-        recovery_events=[inspection_event,capabilities_event,evidence_event,release_governance_event,app_event,package_event,marker_gate_event,integration_anchor_event,uppercase_label_event,application_audit_escape_event]
+        release_audit_sql_event={
+            "event_number":135,
+            "event_code":"V3-CP4-S3-REC-RELEASE-AUDIT-SQL-QUOTING-CORRECTED","occurred_at":NOW,
+            "failed_step":"Execute the generated read-only final-release readiness audit.",
+            "exact_error_or_reason":"Nested single quotes around the literal passed terminated a generated Python SQL string, causing SyntaxError before the prior-detailed-governance query could execute.",
+            "intact_artifacts":"The exact Response 69 restore and project snapshot remained immutable; the copied Response 70 database, inherited capability audit, application source, workbook source, publication, and editable assembly remained intact in the disposable workspace.",
+            "recovery_action":"Converted the generated prior-failure query to parameterized SQL while retaining the dynamically quoted table identifier and all release-readiness checks.",
+            "validation_result":"The generated release-readiness audit compiled and executed against the copied current database.",
+            "data_quality_effect":"None; no query scope or acceptance threshold changed.",
+            "next_checkpoint":"Continue workbook augmentation, reports, tracking, index, manifest, recovery-overlay, and clean-apply validation.",
+        }
+        recovery_events=[inspection_event,capabilities_event,evidence_event,release_governance_event,app_event,package_event,marker_gate_event,integration_anchor_event,uppercase_label_event,application_audit_escape_event,release_audit_sql_event]
 '''
-    text = replace_once(text, anchor, block, "Recovery Events 131-134")
-    applied.append("Recovery Events 131-134")
+    text = replace_once(text, anchor, block, "Recovery Events 131-135")
+    applied.append("Recovery Events 131-135")
 
 required = [
     "*COMPLETE PROJECT THROUGH RESPONSE 69*.zip",
     new_escape,
-    "RECOVERY_EVENTS_125_134.json",
+    "RECOVERY_EVENTS_125_135.json",
     "V3-CP4-S3-REC-GENERATED-MARKER-GATE-CORRECTED",
     "V3-CP4-S3-REC-GENERATED-INTEGRATION-ANCHORS-HARDENED",
     "V3-CP4-S3-REC-UPPERCASE-BASELINE-ARCHIVE-LABEL-CORRECTED",
     "V3-CP4-S3-REC-CAPABILITY-AUDIT-NEWLINE-ESCAPE-CORRECTED",
+    "V3-CP4-S3-REC-RELEASE-AUDIT-SQL-QUOTING-CORRECTED",
 ]
 missing = [marker for marker in required if marker not in text]
 if missing:
@@ -124,4 +156,4 @@ if remaining:
 
 if text != original:
     TARGET.write_text(text, encoding="utf-8")
-print({"status": "passed", "target": TARGET.as_posix(), "applied": applied, "sha256": sha256_file(TARGET)})
+print({"status": "passed", "target": TARGET.as_posix(), "applied": applied, "sha256": sha256_file(TARGET), "governance_sha256": sha256_file(GOVERNANCE)})
