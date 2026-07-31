@@ -50,9 +50,10 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30605460473
 
-      - name: Compile Session 1 completion builder
+      - name: Apply recoverable Checkpoint 2 overlay-manifest correction and compile builder
         run: |
           set -euo pipefail
+          python mrhpd/cp4/session1/checkpoint3/patch_checkpoint2_overlay_apply.py
           python -m py_compile mrhpd/cp4/session1/checkpoint3/build_session1_complete_restore.py
 
       - name: Build complete Session 1 restore through Response 66
@@ -146,6 +147,7 @@ jobs:
           mkdir -p checkpoint3-failure
           cp -f checkpoint3-build.log checkpoint3-failure/ 2>/dev/null || true
           cp -f mrhpd/cp4/session1/checkpoint3/build_session1_complete_restore.py checkpoint3-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session1/checkpoint3/patch_checkpoint2_overlay_apply.py checkpoint3-failure/ 2>/dev/null || true
           find base_r64 checkpoint2_artifact dist_cp4_s1_cp3 -maxdepth 6 -type f -printf '%p\t%s bytes\n' > checkpoint3-failure/file-inventory.txt 2>/dev/null || true
           printf 'The accepted predecessor, frozen Section 3 release, Response 64 restore, and Response 65 Checkpoint 2 recovery package were never modified in place.\n' > checkpoint3-failure/RECOVERY_NOTICE.txt
 
