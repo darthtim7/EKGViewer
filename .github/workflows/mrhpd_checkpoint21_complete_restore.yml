@@ -11,6 +11,7 @@ on:
       - 'mrhpd/cp3/session4/checkpoint21/patch_response_defaults.py'
       - 'mrhpd/cp3/session4/checkpoint21/patch_finalizer_upsert.py'
       - 'mrhpd/cp3/session4/checkpoint21/patch_audit_docx_metadata.py'
+      - 'mrhpd/cp3/session4/checkpoint21/patch_audit_database_counts.py'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      MRHPD_SOURCE_URL: 'https://sdmntprnorthcentralus.oaiusercontent.com/files/00000000-0e38-822f-a8fc-684edefaee38/raw?se=2026-07-31T02:23:40Z&sp=r&sv=2026-02-06&sr=b&scid=0a1cbd96-a047-5c1e-a2a0-c56b92969227&skoid=de71a0d5-fb02-4fce-be69-9296aced242b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-07-31T02:08:06Z&ske=2026-08-02T02:08:06Z&sks=b&skv=2026-02-06&sig=Y%2BoTjaFP8uCsIJCkAHCVO7NzmXLnKeRL%2BUASysY5qW8%3D'
+      MRHPD_SOURCE_URL: 'https://sdmntprwestcentralus.oaiusercontent.com/files/00000000-1bb4-81fb-b541-7468cc9db818/raw?se=2026-07-31T02:29:37Z&sp=r&sv=2026-02-06&sr=b&scid=9f332331-a206-51e2-9073-59e44c8b1524&skoid=de71a0d5-fb02-4fce-be69-9296aced242b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-07-31T02:06:18Z&ske=2026-08-02T02:06:18Z&sks=b&skv=2026-02-06&sig=M1H1APsERN8%2BY00wK695IAQN5bF2Ea5f8%2BERA6nYsI0%3D'
     steps:
       - name: Check out isolated recovery branch
         uses: actions/checkout@v4
@@ -37,6 +38,8 @@ jobs:
           python3 mrhpd/cp3/session4/checkpoint21/patch_finalizer_upsert.py \
             mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
           python3 mrhpd/cp3/session4/checkpoint21/patch_audit_docx_metadata.py \
+            mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
+          python3 mrhpd/cp3/session4/checkpoint21/patch_audit_database_counts.py \
             mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
 
       - name: Execute deterministic Checkpoint 21 finalization and complete restore build
