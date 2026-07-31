@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Patch recoverable Checkpoint 1 builder defects exposed by disposable remote runs.
 
-The first disposable build exposed a generated-source newline escape defect.
-The second and third progressed farther and exposed two three-column report
-rows being unpacked into two variables. This patch applies all corrections and
-records each recovery in the copied project.
+The disposable builds exposed a generated-source newline escape defect, two
+three-column report rows unpacked into two variables, and a JSON object inserted
+as if it were a Python literal in the generated recovery utility. This patch
+applies all corrections and records each recovery in the copied project.
 """
 from pathlib import Path
 
@@ -39,6 +39,12 @@ if old_qa_status not in text:
     raise SystemExit("expected QA report status assignment was not found")
 text = text.replace(old_qa_status, new_qa_status, 1)
 
+old_manifest_literal = "M={json.dumps(manifest,ensure_ascii=False)}"
+new_manifest_literal = "M={manifest!r}"
+if old_manifest_literal not in text:
+    raise SystemExit("expected generated apply-utility JSON manifest literal was not found")
+text = text.replace(old_manifest_literal, new_manifest_literal, 1)
+
 old_events = "        recovery_events=[inspection_event,capabilities_event,evidence_event,app_event,package_event]\n"
 new_events = '''        generated_source_fix_event={
             "event_code":"V3-CP4-S2-REC-GENERATED-AUDIT-NEWLINE-ESCAPE-CORRECTED","occurred_at":NOW,
@@ -66,15 +72,25 @@ new_events = '''        generated_source_fix_event={
             "exact_error_or_reason":"ValueError: too many values to unpack (expected 2) because each QA row contained area, key result, and status while the loop accepted only area and result.",
             "intact_artifacts":"The Response 66 restore and project snapshot, copied synchronized database, application, workbook, publication, editable assembly, capability registry, evidence baseline, drift baseline, and prior QA remained intact.",
             "recovery_action":"Changed the QA report loop to unpack all three values and render the supplied status, then restarted the entire deterministic build from the exact Response 66 baseline.",
-            "validation_result":"The corrected QA report table completed during the successful full rerun.",
+            "validation_result":"The corrected QA report table completed during the subsequent full rerun.",
             "data_quality_effect":"None; the unsuccessful report existed only in an automatically deleted temporary directory.",
             "next_checkpoint":"Complete report validation, indexes, manifests, recovery packaging, and clean-apply verification.",
         }
-        recovery_events=[inspection_event,capabilities_event,evidence_event,app_event,package_event,generated_source_fix_event,report_tuple_fix_event,qa_report_tuple_fix_event]
+        apply_manifest_literal_fix_event={
+            "event_code":"V3-CP4-S2-REC-APPLY-UTILITY-MANIFEST-LITERAL-CORRECTED","occurred_at":NOW,
+            "failed_step":"Clean-apply the completed checkpoint recovery overlay to the exact Response 66 restore during the fourth disposable build.",
+            "exact_error_or_reason":"NameError: name 'false' is not defined because JSON booleans were inserted directly into generated Python source as though the JSON object were a Python literal.",
+            "intact_artifacts":"The exact Response 66 restore, immutable project snapshot, copied synchronized database, application, workbook, publication, indexes, manifests, reports, overlay files, and all package checksums remained intact.",
+            "recovery_action":"Changed the generated utility to embed Python's repr of the verified manifest, preserving False/True literals, and reran the entire build and clean-apply sequence from the exact Response 66 baseline.",
+            "validation_result":"The corrected apply utility parsed its manifest and continued through clean-apply verification in the successful rerun.",
+            "data_quality_effect":"None; the failed generated utility and temporary extraction were deleted automatically and no emitted file was promoted.",
+            "next_checkpoint":"Complete all clean-apply, database, application-audit, archive, and delivery gates.",
+        }
+        recovery_events=[inspection_event,capabilities_event,evidence_event,app_event,package_event,generated_source_fix_event,report_tuple_fix_event,qa_report_tuple_fix_event,apply_manifest_literal_fix_event]
 '''
 if old_events not in text:
     raise SystemExit("expected recovery_events assignment was not found")
 text = text.replace(old_events, new_events, 1)
-text = text.replace('RECOVERY_EVENTS_101_105.json', 'RECOVERY_EVENTS_101_108.json')
+text = text.replace('RECOVERY_EVENTS_101_105.json', 'RECOVERY_EVENTS_101_109.json')
 path.write_text(text, encoding="utf-8")
 print("patched", path)
