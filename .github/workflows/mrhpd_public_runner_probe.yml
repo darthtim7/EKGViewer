@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 10
     env:
       CROSS_REPO_TOKEN: ${{ secrets.GH_PAT || secrets.PAT || secrets.PERSONAL_ACCESS_TOKEN || github.token }}
+      ADOBE_SHARE_URL: https://www.adobe.com/files/id/urn:aaid:sc:US:cc4299d9-089a-5c85-8148-8da7282afec3
+      ADOBE_CONTENT_URL: https://platform-cs-va6.adobe.io/content/storage/id/urn:aaid:sc:US:cc4299d9-089a-5c85-8148-8da7282afec3
     steps:
       - name: Runtime probe
         run: |
@@ -47,33 +49,51 @@ jobs:
             https://api.github.com/repos/darthtim7/MedGPT/actions/artifacts/8760714177)
           printf 'repository_http_status=%s\nartifact_http_status=%s\n' "$repo_status" "$artifact_status" | tee probe/status.txt
           if [[ "$repo_status" == '200' ]]; then
-            python3 - <<'PY'
-          import json
-          from pathlib import Path
-          value = json.loads(Path('probe/repo.json').read_text())
-          print('repository_access=passed')
-          print('repository_private=' + str(value.get('private')).lower())
-          PY
+            printf 'repository_access=passed\n' | tee -a probe/status.txt
           else
-            printf 'repository_access=failed\n'
+            printf 'repository_access=failed\n' | tee -a probe/status.txt
           fi
           if [[ "$artifact_status" == '200' ]]; then
-            python3 - <<'PY'
-          import json
-          from pathlib import Path
-          value = json.loads(Path('probe/artifact.json').read_text())
-          print('artifact_access=passed')
-          print('artifact_name=' + str(value.get('name')))
-          print('artifact_size_in_bytes=' + str(value.get('size_in_bytes')))
-          PY
+            printf 'artifact_access=passed\n' | tee -a probe/status.txt
           else
-            printf 'artifact_access=failed\n'
+            printf 'artifact_access=failed\n' | tee -a probe/status.txt
           fi
+
+      - name: Test anonymous Adobe share and content routes
+        run: |
+          set -euo pipefail
+          share_meta=$(curl -L -sS -D probe/adobe-share-headers.txt -o probe/adobe-share.html \
+            -w 'http=%{http_code};bytes=%{size_download};type=%{content_type};effective=%{url_effective}' \
+            "$ADOBE_SHARE_URL")
+          content_meta=$(curl -L -sS -D probe/adobe-content-headers.txt -o probe/adobe-content.bin \
+            -w 'http=%{http_code};bytes=%{size_download};type=%{content_type};effective=%{url_effective}' \
+            "$ADOBE_CONTENT_URL")
+          printf 'adobe_share=%s\nadobe_content=%s\n' "$share_meta" "$content_meta" | tee -a probe/status.txt
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path('probe/adobe-share.html').read_text(encoding='utf-8', errors='replace')
+          title = re.search(r'<title[^>]*>(.*?)</title>', html, flags=re.I|re.S)
+          print('adobe_share_title=' + (re.sub(r'\s+', ' ', title.group(1)).strip() if title else 'not_found'))
+          markers = {
+              'contains_sign_in': bool(re.search(r'sign[ -]?in|log[ -]?in', html, flags=re.I)),
+              'contains_download': bool(re.search(r'download', html, flags=re.I)),
+              'contains_asset_urn': 'cc4299d9-089a-5c85-8148-8da7282afec3' in html,
+              'contains_access_denied': bool(re.search(r'access denied|permission|not authorized', html, flags=re.I)),
+          }
+          with Path('probe/status.txt').open('a', encoding='utf-8') as handle:
+              for key, value in markers.items():
+                  handle.write(f'adobe_{key}={str(value).lower()}\n')
+          PY
+          rm -f probe/adobe-content.bin
 
       - name: Upload probe evidence
         uses: actions/upload-artifact@v4
         with:
           name: MRHPD-public-runner-probe
-          path: probe/status.txt
+          path: |
+            probe/status.txt
+            probe/adobe-share-headers.txt
+            probe/adobe-content-headers.txt
           if-no-files-found: error
           retention-days: 30
