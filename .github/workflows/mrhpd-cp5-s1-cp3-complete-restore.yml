@@ -64,6 +64,7 @@ jobs:
           set -euo pipefail
           python mrhpd/cp5/session1/checkpoint2/normalize_checkpoint2_builder.py
           python mrhpd/cp5/session1/checkpoint3/normalize_section5_session1_complete_builder.py
+          python mrhpd/cp5/session1/checkpoint3/recover_session1_archive_size.py
 
       - name: Compile deterministic builders and independent verifier
         run: |
