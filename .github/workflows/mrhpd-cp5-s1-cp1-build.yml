@@ -53,11 +53,12 @@ jobs:
           python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72_v2.py
           python -m py_compile mrhpd/cp5/session1/checkpoint1/section5_checkpoint1_reporting.py
           python -m py_compile mrhpd/cp5/session1/checkpoint1/build_section5_checkpoint1.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/build_section5_checkpoint1_v2.py
 
       - name: Build and clean-verify Response 75 checkpoint recovery
         run: |
           set -euo pipefail
-          python mrhpd/cp5/session1/checkpoint1/build_section5_checkpoint1.py \
+          python mrhpd/cp5/session1/checkpoint1/build_section5_checkpoint1_v2.py \
             --volume1-dir inputs/volume1 \
             --volume2-dir inputs/volume2 \
             --dist dist_cp5_s1_cp1 | tee section5-checkpoint1-build.log
@@ -111,8 +112,7 @@ jobs:
         run: |
           mkdir -p failure_diagnostics
           cp -f section5-checkpoint1-build.log failure_diagnostics/ 2>/dev/null || true
-          cp -rf dist_cp5_s1_cp1 failure_diagnostics/ 2>/dev/null || true
-          cp -rf inputs failure_diagnostics/ 2>/dev/null || true
+          find dist_cp5_s1_cp1 -maxdepth 1 -type f -size -20M -exec cp -f {} failure_diagnostics/ \; 2>/dev/null || true
 
       - name: Upload failure diagnostics
         if: failure()
