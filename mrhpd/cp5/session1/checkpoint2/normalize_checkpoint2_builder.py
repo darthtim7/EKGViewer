@@ -29,6 +29,12 @@ text = text.replace(
     '        ws.append([json.dumps(value, ensure_ascii=False, sort_keys=True) if isinstance(value, (dict, list, tuple, set)) else value for value in (row.get(header) for header in headers)])',
 )
 
+# Resolve the generated recovery utility before changing cwd so its path cannot be duplicated.
+text = text.replace(
+    'str(tools / "apply_checkpoint_recovery.py")',
+    'str((tools / "apply_checkpoint_recovery.py").resolve())',
+)
+
 # Preserve exact recoverable build events in the project record.
 function_start = text.index('def recovery_events(now_iso: str)')
 function_end = text.index('\n\n\ndef _clone_response_row', function_start)
@@ -48,6 +54,11 @@ events = [
         'V3-CP5-S1-REC-191-REPORT-REGISTER-STRUCTURED-VALUE',
         'The subsequent print-production register attempted the same direct list assignment and openpyxl raised ValueError while writing the Selection sheet.',
         'Preserved the verified copied state, added the same deterministic JSON serialization to the independent checkpoint-register builder, regenerated the DOCX, searchable PDF, XLSX register, rendered report QA, indexes, manifests, recovery package, and clean-application evidence, and reran every gate.'
+    ),
+    (
+        'V3-CP5-S1-REC-192-CLEAN-APPLY-ABSOLUTE-PATH',
+        'The next otherwise-complete disposable build invoked the generated recovery utility with a relative path while also setting its package directory as cwd, duplicating the path and producing Errno 2: No such file or directory.',
+        'Preserved the completed print derivatives and synchronized copied project, resolved the generated recovery utility to an absolute path before subprocess launch, reran the clean application from the exact Response 72 restore, and reran every packaging and independent-verification gate.'
     ),
 ]
 for event_code, condition, recovery in events:
