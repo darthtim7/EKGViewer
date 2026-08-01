@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import sys
+import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -36,6 +37,13 @@ def verify_zip(path: Path) -> list[str]:
     return names
 
 
+def safe_extract(path: Path, destination: Path) -> None:
+    verify_zip(path)
+    destination.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path) as zf:
+        zf.extractall(destination)
+
+
 def main() -> None:
     dist = Path(sys.argv[1] if len(sys.argv) > 1 else "dist_cp5_s2_cp1")
     deliveries = list(dist.glob("MRHPD v3.0.0a Response 79 Section 5 Session 2 Checkpoint 1 Recovery Package *.zip"))
@@ -61,15 +69,22 @@ def main() -> None:
         raise RuntimeError({"missing_delivery_controls": missing})
     summary_path = dist / "MRHPD_RESPONSE79_SECTION5_SESSION2_CHECKPOINT1_BUILD_SUMMARY.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    report_pdf = next(dist.glob("*Provider Preview and Physical Proof Intake Report.pdf"))
-    report_xlsx = next(dist.glob("*Provider Preview and Proof Register.xlsx"))
-    reader = PdfReader(str(report_pdf))
-    searchable = sum(1 for page in reader.pages if (page.extract_text() or "").strip())
-    wb = load_workbook(report_xlsx, read_only=True, data_only=False)
-    try:
-        register_sheets = len(wb.sheetnames)
-    finally:
-        wb.close()
+    with tempfile.TemporaryDirectory(prefix="mrhpd-r79-independent-") as td:
+        extracted = Path(td)
+        safe_extract(delivery, extracted)
+        report_pdfs = list(extracted.glob("*Provider Preview and Physical Proof Intake Report.pdf"))
+        report_xlsxs = list(extracted.glob("*Provider Preview and Proof Register.xlsx"))
+        if len(report_pdfs) != 1 or len(report_xlsxs) != 1:
+            raise RuntimeError({"report_pdf_candidates": [str(path) for path in report_pdfs], "report_register_candidates": [str(path) for path in report_xlsxs]})
+        report_pdf = report_pdfs[0]
+        report_xlsx = report_xlsxs[0]
+        reader = PdfReader(str(report_pdf))
+        searchable = sum(1 for page in reader.pages if (page.extract_text() or "").strip())
+        wb = load_workbook(report_xlsx, read_only=True, data_only=False)
+        try:
+            register_sheets = len(wb.sheetnames)
+        finally:
+            wb.close()
     gates = {
         "summary": summary.get("status") == "passed",
         "clean_apply": summary.get("recovery", {}).get("clean_apply", {}).get("status") == "passed",
