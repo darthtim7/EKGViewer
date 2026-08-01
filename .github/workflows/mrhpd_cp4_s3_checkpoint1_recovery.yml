@@ -1,0 +1,237 @@
+name: MRHPD Section 4 Session 3 Checkpoint 1 recovery
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_cp4_s3_checkpoint1_recovery.yml'
+      - 'mrhpd/cp4/session3/checkpoint1/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-checkpoint-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deterministic document, workbook, PDF, and rendering dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 pypdf==5.9.0 pymupdf==1.26.4
+
+      - name: Download Response 69 complete restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-69-Complete-Restore-Volume-1-of-2-v2
+          path: response69_artifacts/volume1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30635835617
+
+      - name: Download Response 69 complete restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-69-Complete-Restore-Volume-2-of-2-v2
+          path: response69_artifacts/volume2
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30635835617
+
+      - name: Download Response 69 verification and controls
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-69-Session-2-Complete-Verification-v2
+          path: response69_verification
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30635835617
+
+      - name: Generate, integrate, normalize, and compile the Session 3 Checkpoint 1 builder
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/prepare_session3_checkpoint1_builder.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/relax_generated_integration_patcher.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/normalize_generated_session3_builder.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/session3_release_governance.py
+          python mrhpd/cp4/session3/checkpoint1/prepare_session3_checkpoint1_builder.py | tee builder-generation.log
+          python mrhpd/cp4/session3/checkpoint1/relax_generated_integration_patcher.py | tee patcher-relaxation.log
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py
+          python mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py | tee builder-integration.log
+          python mrhpd/cp4/session3/checkpoint1/normalize_generated_session3_builder.py | tee builder-normalization.log
+          python mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py | tee builder-report-fix.log
+          python -m py_compile mrhpd/cp4/session3/checkpoint1/build_checkpoint1_recovery.py
+
+      - name: Build Section 4 Session 3 Checkpoint 1 recovery through Response 70
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session3/checkpoint1/build_checkpoint1_recovery.py \
+            --input-dir response69_artifacts \
+            --dist dist_cp4_s3_cp1 | tee checkpoint1-build.log
+
+      - name: Verify Checkpoint 1 recovery outputs
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, json, re, zipfile
+
+          def sha(path):
+              h=hashlib.sha256()
+              with path.open('rb') as handle:
+                  for block in iter(lambda:handle.read(1024*1024),b''):
+                      h.update(block)
+              return h.hexdigest()
+
+          def verify_zip(path):
+              with zipfile.ZipFile(path) as zf:
+                  assert zf.testzip() is None
+                  names=zf.namelist()
+                  assert len(names)==len(set(names))
+                  for name in names:
+                      p=PurePosixPath(name.replace('\\','/'))
+                      assert not p.is_absolute() and '..' not in p.parts and not re.match(r'^[A-Za-z]:',name), name
+
+          d=Path('dist_cp4_s3_cp1')
+          recovery=list(d.glob('*RECOVERY DATA THROUGH RESPONSE 70*.zip'))
+          assert len(recovery)==1, recovery
+          recovery=recovery[0]
+          verify_zip(recovery)
+          verification=json.loads((d/'MRHPD v3.0.0a Response 70 Checkpoint 1 Recovery Verification.json').read_text())
+          summary=json.loads((d/'MRHPD_RESPONSE70_CHECKPOINT1_BUILD_SUMMARY.json').read_text())
+          assert verification['status']=='passed'
+          assert verification['accepted_predecessor_mutated'] is False
+          assert verification['checkpoint_1_of_3_complete'] is True
+          assert verification['session_3_of_3_complete'] is False
+          assert verification['remediation_section_4_complete'] is False
+          assert verification['clean_apply']=='passed'
+          assert verification['release_governance']['status']=='passed'
+          assert summary['status']=='passed'
+          assert summary['database']['integrity']=='ok'
+          assert summary['database']['foreign_key_violations']==0
+          assert summary['database']['response70_records']==1
+          assert summary['database']['checkpoint_state']=='checkpoint_complete'
+          assert summary['database']['table_count']>=198
+          assert summary['workbook']['status']=='passed'
+          assert summary['workbook']['current_sheet_count']>=65
+          assert summary['workbook']['formula_error_count']==0
+          assert summary['application']['status']=='passed'
+          assert summary['application']['application_unchanged'] is True
+          assert summary['application']['release_readiness_audit']['status']=='passed'
+          assert summary['publication']['status']=='passed'
+          assert summary['publication']['publication_pages']==537
+          assert summary['publication']['searchable_pages']==537
+          release=summary['release_governance']
+          assert release['status']=='passed'
+          assert release['gate_count']>=17
+          assert release['passed_gates']==release['gate_count']
+          assert release['failed_gates']==0
+          assert release['controlled_risk_count']>=6
+          assert summary['release_reports']['status']=='passed'
+          assert summary['indexes']['bit_index_integrity']=='ok'
+          assert summary['manifest']['mismatches']==0
+          assert recovery.stat().st_size < 104_857_600
+          print(json.dumps({
+              'status':'passed',
+              'recovery':{'name':recovery.name,'bytes':recovery.stat().st_size,'sha256':sha(recovery)},
+              'database_tables':summary['database']['table_count'],
+              'workbook_sheets':summary['workbook']['current_sheet_count'],
+              'release_gates':release['gate_count'],
+              'controlled_risks':release['controlled_risk_count'],
+              'next':summary['next'],
+          },indent=2))
+          PY
+
+      - name: Build current-turn delivery wrapper
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import json, re, zipfile
+          d=Path('dist_cp4_s3_cp1')
+          recovery=list(d.glob('*RECOVERY DATA THROUGH RESPONSE 70*.zip'))
+          assert len(recovery)==1
+          baseline=list(Path('response69_verification').rglob('*.zip'))
+          assert len(baseline)==1, baseline
+          files=[
+              recovery[0],
+              d/f'{recovery[0].name}.sha256.txt',
+              d/'MRHPD v3.0.0a Response 70 Checkpoint 1 Recovery Verification.json',
+              d/'MRHPD_RESPONSE70_CHECKPOINT1_BUILD_SUMMARY.json',
+              Path('builder-generation.log'),
+              Path('patcher-relaxation.log'),
+              Path('builder-integration.log'),
+              Path('builder-normalization.log'),
+              Path('builder-report-fix.log'),
+              Path('checkpoint1-build.log'),
+              Path('mrhpd/cp4/session3/checkpoint1/prepare_session3_checkpoint1_builder.py'),
+              Path('mrhpd/cp4/session3/checkpoint1/relax_generated_integration_patcher.py'),
+              Path('mrhpd/cp4/session3/checkpoint1/patch_generated_session3_integration.py'),
+              Path('mrhpd/cp4/session3/checkpoint1/normalize_generated_session3_builder.py'),
+              Path('mrhpd/cp4/session3/checkpoint1/fix_generated_session3_report.py'),
+              Path('mrhpd/cp4/session3/checkpoint1/session3_release_governance.py'),
+              Path('mrhpd/cp4/session3/checkpoint1/build_checkpoint1_recovery.py'),
+              baseline[0],
+          ]
+          missing=[str(path) for path in files if not path.exists()]
+          assert not missing, missing
+          wrapper=d/'MRHPD v3.0.0a Response 70 Checkpoint 1 Recovery Delivery.zip'
+          with zipfile.ZipFile(wrapper,'w',compression=zipfile.ZIP_STORED,allowZip64=True) as zf:
+              for path in files:
+                  zf.write(path,path.name)
+          with zipfile.ZipFile(wrapper) as zf:
+              assert zf.testzip() is None
+              names=zf.namelist()
+              assert len(names)==len(set(names))
+              for name in names:
+                  p=PurePosixPath(name.replace('\\','/'))
+                  assert not p.is_absolute() and '..' not in p.parts and not re.match(r'^[A-Za-z]:',name), name
+          assert wrapper.stat().st_size < 104_857_600
+          print(json.dumps({'wrapper':wrapper.name,'bytes':wrapper.stat().st_size,'members':len(files)},indent=2))
+          PY
+
+      - name: Upload Checkpoint 1 recovery delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-70-Checkpoint-1-Recovery-Delivery
+          path: dist_cp4_s3_cp1/MRHPD v3.0.0a Response 70 Checkpoint 1 Recovery Delivery.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p session3-checkpoint1-failure
+          cp -f builder-generation.log session3-checkpoint1-failure/ 2>/dev/null || true
+          cp -f patcher-relaxation.log session3-checkpoint1-failure/ 2>/dev/null || true
+          cp -f builder-integration.log session3-checkpoint1-failure/ 2>/dev/null || true
+          cp -f builder-normalization.log session3-checkpoint1-failure/ 2>/dev/null || true
+          cp -f builder-report-fix.log session3-checkpoint1-failure/ 2>/dev/null || true
+          cp -f checkpoint1-build.log session3-checkpoint1-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session3/checkpoint1/*.py session3-checkpoint1-failure/ 2>/dev/null || true
+          find response69_artifacts response69_verification dist_cp4_s3_cp1 -maxdepth 12 -type f -printf '%p\t%s bytes\n' > session3-checkpoint1-failure/file-inventory.txt 2>/dev/null || true
+          printf 'The Response 69 restore, project snapshot, accepted predecessor, frozen Section 3 release, 537-page publication, editable assembly, and main application source were never modified in place.\n' > session3-checkpoint1-failure/RECOVERY_NOTICE.txt
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Response-70-Checkpoint-1-Failure-Diagnostics
+          path: session3-checkpoint1-failure/
+          if-no-files-found: warn
+          retention-days: 90

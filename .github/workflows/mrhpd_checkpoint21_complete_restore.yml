@@ -1,0 +1,125 @@
+name: MRHPD Checkpoint 21 complete restore
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_checkpoint21_complete_restore.yml'
+      - 'mrhpd/cp3/session4/checkpoint21/build_complete_restore.py'
+      - 'mrhpd/cp3/session4/checkpoint21/patch_legacy_exports.py'
+      - 'mrhpd/cp3/session4/checkpoint21/patch_response_defaults.py'
+      - 'mrhpd/cp3/session4/checkpoint21/patch_finalizer_upsert.py'
+      - 'mrhpd/cp3/session4/checkpoint21/patch_audit_docx_metadata.py'
+      - 'mrhpd/cp3/session4/checkpoint21/patch_audit_database_counts.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build-complete-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MRHPD_SOURCE_URL: 'https://sdmntprwestcentralus.oaiusercontent.com/files/00000000-1bb4-81fb-b541-7468cc9db818/raw?se=2026-07-31T02:29:37Z&sp=r&sv=2026-02-06&sr=b&scid=9f332331-a206-51e2-9073-59e44c8b1524&skoid=de71a0d5-fb02-4fce-be69-9296aced242b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-07-31T02:06:18Z&ske=2026-08-02T02:06:18Z&sks=b&skv=2026-02-06&sig=M1H1APsERN8%2BY00wK695IAQN5bF2Ea5f8%2BERA6nYsI0%3D'
+    steps:
+      - name: Check out isolated recovery branch
+        uses: actions/checkout@v4
+
+      - name: Install deterministic repair layers
+        run: |
+          set -euo pipefail
+          python3 mrhpd/cp3/session4/checkpoint21/patch_legacy_exports.py \
+            mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
+          python3 mrhpd/cp3/session4/checkpoint21/patch_response_defaults.py \
+            mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
+          python3 mrhpd/cp3/session4/checkpoint21/patch_finalizer_upsert.py \
+            mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
+          python3 mrhpd/cp3/session4/checkpoint21/patch_audit_docx_metadata.py \
+            mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
+          python3 mrhpd/cp3/session4/checkpoint21/patch_audit_database_counts.py \
+            mrhpd/cp3/session4/checkpoint21/build_complete_restore.py
+
+      - name: Execute deterministic Checkpoint 21 finalization and complete restore build
+        run: |
+          set -euo pipefail
+          python3 mrhpd/cp3/session4/checkpoint21/build_complete_restore.py | tee checkpoint21-build.log
+
+      - name: Upload complete self-contained restore ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Checkpoint21-Complete-Restore-Through-Response-63
+          path: |
+            dist/*COMPLETE RESTORE THROUGH RESPONSE 63*.zip
+            dist/*COMPLETE RESTORE THROUGH RESPONSE 63*.sha256.txt
+            dist/MRHPD v3.0.0a Response 63 Complete Restore Verification.json
+            dist/MRHPD_CHECKPOINT21_BUILD_SUMMARY.json
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Drive transport volume 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Checkpoint21-Complete-Restore-Drive-Volume-1-of-3
+          path: dist/drive_volume_1/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Drive transport volume 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Checkpoint21-Complete-Restore-Drive-Volume-2-of-3
+          path: dist/drive_volume_2/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Drive transport volume 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Checkpoint21-Complete-Restore-Drive-Volume-3-of-3
+          path: dist/drive_volume_3/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload final verification and current controls
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Checkpoint21-Final-Verification-and-Controls
+          path: |
+            checkpoint21-build.log
+            dist/*.json
+            dist/*.sha256.txt
+            mrhpd/cp3/session4/checkpoint21/Response_63_Tracking.json
+            mrhpd/cp3/session4/checkpoint21/RAW_AND_NET_TRACKING.md
+            mrhpd/cp3/session4/checkpoint21/CUMULATIVE_THREAD_INDEX_UPDATE.md
+            mrhpd/cp3/session4/checkpoint21/RECOVERY_EVENTS_68_84.json
+            mrhpd/cp3/session4/checkpoint21/SESSION4_RESPONSE_RECONCILIATION.json
+            mrhpd/cp3/session4/checkpoint21/Instructions.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p checkpoint21-failure
+          cp -f checkpoint21-build.log checkpoint21-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp3/session4/checkpoint21/FINAL_RELEASE_ORCHESTRATOR.py checkpoint21-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp3/session4/checkpoint21/FINAL_RELEASE_ORCHESTRATOR.py.repair.json checkpoint21-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp3/session4/checkpoint21/SESSION4_RESPONSE_RECONCILIATION.json checkpoint21-failure/ 2>/dev/null || true
+          find checkpoint21_runtime dist -maxdepth 5 -type f -printf '%p\t%s bytes\n' > checkpoint21-failure/partial-file-inventory.txt 2>/dev/null || true
+          printf 'The accepted predecessor was never edited in place. Review the job log and recovered intermediates for the exact failed assertion.\n' > checkpoint21-failure/RECOVERY_NOTICE.txt
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Checkpoint21-Failure-Diagnostics
+          path: checkpoint21-failure/
+          if-no-files-found: warn
+          retention-days: 90

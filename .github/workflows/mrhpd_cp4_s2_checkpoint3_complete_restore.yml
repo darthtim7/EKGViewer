@@ -1,0 +1,319 @@
+name: MRHPD Section 4 Session 2 Checkpoint 3 complete restore
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_cp4_s2_checkpoint3_complete_restore.yml'
+      - 'mrhpd/cp4/session2/checkpoint3/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-session-complete-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deterministic document, workbook, PDF, and rendering dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 pypdf==5.9.0 pymupdf==1.26.4
+
+      - name: Download Response 66 restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-66-Complete-Restore-Volume-1-of-2
+          path: response66_artifacts/volume1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30613493340
+
+      - name: Download Response 66 restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-66-Complete-Restore-Volume-2-of-2
+          path: response66_artifacts/volume2
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30613493340
+
+      - name: Download verified Response 68 Checkpoint 2 recovery delivery
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-68-Checkpoint-2-Recovery-Delivery
+          path: response68_artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30624746024
+
+      - name: Reconstruct and verify the complete Response 66 restore
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, json, re, subprocess, sys, zipfile
+
+          EXPECTED_BYTES = 177_617_796
+          EXPECTED_SHA256 = '38c8fa08763d5698217ce33a2bbe1e889e726087575b14fb31086f38cfe1300f'
+
+          def sha(path):
+              h = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for block in iter(lambda: handle.read(1024 * 1024), b''):
+                      h.update(block)
+              return h.hexdigest()
+
+          def safe_extract(path, target):
+              target.mkdir(parents=True, exist_ok=True)
+              with zipfile.ZipFile(path) as zf:
+                  names = zf.namelist()
+                  assert len(names) == len(set(names)), 'duplicate ZIP members'
+                  for name in names:
+                      p = PurePosixPath(name.replace('\\', '/'))
+                      assert not p.is_absolute() and '..' not in p.parts and not re.match(r'^[A-Za-z]:', name), name
+                  assert zf.testzip() is None
+                  zf.extractall(target)
+
+          wrappers = sorted(Path('response66_artifacts').rglob('*Complete Restore Drive Volume * of 2.zip'))
+          assert len(wrappers) == 2, wrappers
+          staging = Path('response66_reassembly')
+          for index, wrapper in enumerate(wrappers, 1):
+              safe_extract(wrapper, staging / f'volume{index}')
+          flat = Path('response66_reassembly_flat')
+          flat.mkdir()
+          seen = {}
+          for root in sorted(staging.iterdir()):
+              for path in root.rglob('*'):
+                  if not path.is_file():
+                      continue
+                  digest = sha(path)
+                  destination = flat / path.name
+                  if destination.exists():
+                      assert seen[path.name] == digest, path.name
+                  else:
+                      destination.write_bytes(path.read_bytes())
+                      seen[path.name] = digest
+          utilities = list(flat.glob('reassemble_response66_complete_restore.py'))
+          assert len(utilities) == 1, utilities
+          result = subprocess.run([sys.executable, str(utilities[0])], cwd=flat, text=True, capture_output=True, timeout=1800)
+          assert result.returncode == 0, {'stdout': result.stdout[-10000:], 'stderr': result.stderr[-10000:]}
+          restores = [p for p in flat.glob('*.zip') if p.stat().st_size == EXPECTED_BYTES and sha(p) == EXPECTED_SHA256]
+          assert len(restores) == 1, [(p.name, p.stat().st_size, sha(p)) for p in flat.glob('*.zip')]
+          target = Path('base_r66')
+          target.mkdir()
+          destination = target / restores[0].name
+          destination.write_bytes(restores[0].read_bytes())
+          print(json.dumps({'status': 'passed', 'restore': destination.name, 'bytes': destination.stat().st_size, 'sha256': sha(destination)}, indent=2))
+          PY
+
+      - name: Extract the verified Response 68 checkpoint delivery
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, json, re, zipfile
+
+          EXPECTED_INNER_BYTES = 18_318_469
+          EXPECTED_INNER_SHA256 = 'b466c463c55dc95d2ac780ff78755f5ae09fa19d9a6be4fb97e914af7568adbe'
+
+          def sha(path):
+              h = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for block in iter(lambda: handle.read(1024 * 1024), b''):
+                      h.update(block)
+              return h.hexdigest()
+
+          wrappers = list(Path('response68_artifact').rglob('*Response 68 Checkpoint 2 Recovery Delivery.zip'))
+          assert len(wrappers) == 1, wrappers
+          output = Path('response68_recovery_input')
+          output.mkdir()
+          with zipfile.ZipFile(wrappers[0]) as zf:
+              names = zf.namelist()
+              assert len(names) == len(set(names))
+              for name in names:
+                  p = PurePosixPath(name.replace('\\', '/'))
+                  assert not p.is_absolute() and '..' not in p.parts and not re.match(r'^[A-Za-z]:', name), name
+              assert zf.testzip() is None
+              zf.extractall(output)
+          inner = [p for p in output.rglob('*RECOVERY DATA THROUGH RESPONSE 68*.zip') if p.stat().st_size == EXPECTED_INNER_BYTES and sha(p) == EXPECTED_INNER_SHA256]
+          assert len(inner) == 1, [(p.name, p.stat().st_size, sha(p)) for p in output.rglob('*.zip')]
+          print(json.dumps({'status': 'passed', 'delivery': wrappers[0].name, 'inner_recovery': inner[0].name, 'bytes': inner[0].stat().st_size, 'sha256': sha(inner[0])}, indent=2))
+          PY
+
+      - name: Generate and compile the Session 2 complete-restore builder
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session2/checkpoint3/prepare_session2_complete_builder.py
+          python -m py_compile mrhpd/cp4/session2/checkpoint3/prepare_session2_complete_builder.py
+          python -m py_compile mrhpd/cp4/session2/checkpoint3/build_session2_complete_restore.py
+
+      - name: Build Checkpoint 3 and the complete Session 2 restore through Response 69
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session2/checkpoint3/build_session2_complete_restore.py \
+            --base-dir base_r66 \
+            --checkpoint2-dir response68_recovery_input \
+            --dist dist_cp4_s2_cp3 | tee session2-complete-build.log
+
+      - name: Verify Session 2 complete-restore outputs
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, json, re, zipfile
+
+          def sha(path):
+              h = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for block in iter(lambda: handle.read(1024 * 1024), b''):
+                      h.update(block)
+              return h.hexdigest()
+
+          def verify_zip(path):
+              with zipfile.ZipFile(path) as zf:
+                  assert zf.testzip() is None
+                  names = zf.namelist()
+                  assert len(names) == len(set(names))
+                  for name in names:
+                      p = PurePosixPath(name.replace('\\', '/'))
+                      assert not p.is_absolute() and '..' not in p.parts and not re.match(r'^[A-Za-z]:', name), name
+
+          d = Path('dist_cp4_s2_cp3')
+          restores = list(d.glob('*Session 2 of 3 COMPLETE RESTORE THROUGH RESPONSE 69*.zip'))
+          projects = list(d.glob('*Session 2 of 3 COMPLETE PROJECT THROUGH RESPONSE 69*.zip'))
+          volumes = sorted(d.glob('MRHPD v3.0.0a Response 69 Complete Restore Drive Volume * of 2.zip'))
+          assert len(restores) == 1, restores
+          assert len(projects) == 1, projects
+          assert len(volumes) == 2, volumes
+          for path in [restores[0], projects[0], *volumes]:
+              verify_zip(path)
+          verification = json.loads((d / 'MRHPD v3.0.0a Response 69 Complete Restore Verification.json').read_text())
+          summary = json.loads((d / 'MRHPD_RESPONSE69_SESSION2_COMPLETE_BUILD_SUMMARY.json').read_text())
+          assert verification['status'] == 'passed'
+          assert verification['self_contained'] is True
+          assert verification['checkpoint_3_of_3_complete'] is True
+          assert verification['session_2_of_3_complete'] is True
+          assert verification['remediation_section_4_complete'] is False
+          assert verification['accepted_predecessor_mutated'] is False
+          assert summary['status'] == 'passed'
+          assert summary['database']['integrity'] == 'ok'
+          assert summary['database']['foreign_key_violations'] == 0
+          assert summary['database']['response69_records'] == 1
+          assert summary['database']['checkpoint_state'] == 'session_complete'
+          assert summary['database']['session_release_state'] == 'session_complete'
+          assert summary['workbook']['status'] == 'passed'
+          assert summary['workbook']['formula_error_count'] == 0
+          assert summary['application']['status'] == 'passed'
+          assert summary['application']['application_source_preserved'] is True
+          assert summary['publication']['status'] == 'passed'
+          assert summary['publication']['publication_pages'] == 537
+          assert summary['publication']['searchable_pages'] == 537
+          assert summary['indexes']['bit_index_integrity'] == 'ok'
+          assert summary['clean_project_verification']['status'] == 'passed'
+          assert summary['complete_restore']['clean_restore_verifier'] == 'passed'
+          assert summary['transport']['status'] == 'passed'
+          assert len(summary['transport']['volumes']) == 2
+          assert all(v['qa']['bytes'] < 104_857_600 for v in summary['transport']['volumes'])
+          print(json.dumps({
+              'status': 'passed',
+              'project_archive': {'name': projects[0].name, 'bytes': projects[0].stat().st_size, 'sha256': sha(projects[0])},
+              'complete_restore': {'name': restores[0].name, 'bytes': restores[0].stat().st_size, 'sha256': sha(restores[0])},
+              'volumes': [{'name': p.name, 'bytes': p.stat().st_size, 'sha256': sha(p)} for p in volumes],
+              'database_tables': summary['database']['table_count'],
+              'workbook_sheets': summary['workbook']['current_sheet_count'],
+              'next': summary['next'],
+          }, indent=2))
+          PY
+
+      - name: Build verification delivery wrapper
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import json, re, zipfile
+          d = Path('dist_cp4_s2_cp3')
+          controls = list(d.glob('MRHPD v3.0.0a Response 69 Final Verification and Controls.zip'))
+          assert len(controls) == 1
+          files = [
+              controls[0],
+              d / 'MRHPD v3.0.0a Response 69 Complete Restore Verification.json',
+              d / 'MRHPD_RESPONSE69_SESSION2_COMPLETE_BUILD_SUMMARY.json',
+              d / 'MRHPD_RESPONSE69_COMPLETE_RESTORE_TRANSPORT_MANIFEST.json',
+              d / 'reassemble_response69_complete_restore.py',
+              Path('session2-complete-build.log'),
+          ]
+          missing = [str(path) for path in files if not path.exists()]
+          assert not missing, missing
+          wrapper = d / 'MRHPD v3.0.0a Response 69 Session 2 Complete Verification Delivery.zip'
+          with zipfile.ZipFile(wrapper, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+              for path in files:
+                  zf.write(path, path.name)
+          with zipfile.ZipFile(wrapper) as zf:
+              assert zf.testzip() is None
+              names = zf.namelist()
+              assert len(names) == len(set(names))
+              for name in names:
+                  p = PurePosixPath(name.replace('\\', '/'))
+                  assert not p.is_absolute() and '..' not in p.parts and not re.match(r'^[A-Za-z]:', name), name
+          assert wrapper.stat().st_size < 104_857_600
+          print(json.dumps({'wrapper': wrapper.name, 'bytes': wrapper.stat().st_size, 'members': len(files)}, indent=2))
+          PY
+
+      - name: Upload Response 69 complete restore volume 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-69-Complete-Restore-Volume-1-of-2
+          path: dist_cp4_s2_cp3/MRHPD v3.0.0a Response 69 Complete Restore Drive Volume 1 of 2.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Response 69 complete restore volume 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-69-Complete-Restore-Volume-2-of-2
+          path: dist_cp4_s2_cp3/MRHPD v3.0.0a Response 69 Complete Restore Drive Volume 2 of 2.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Response 69 verification and controls
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-69-Session-2-Complete-Verification
+          path: dist_cp4_s2_cp3/MRHPD v3.0.0a Response 69 Session 2 Complete Verification Delivery.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p session2-complete-failure
+          cp -f session2-complete-build.log session2-complete-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session2/checkpoint3/prepare_session2_complete_builder.py session2-complete-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session2/checkpoint3/build_session2_complete_restore.py session2-complete-failure/ 2>/dev/null || true
+          find response66_artifacts response68_artifact response68_recovery_input base_r66 dist_cp4_s2_cp3 -maxdepth 12 -type f -printf '%p\t%s bytes\n' > session2-complete-failure/file-inventory.txt 2>/dev/null || true
+          printf 'The Response 66 restore, Response 68 recovery, accepted predecessor, frozen Section 3 release, 537-page publication, editable assembly, and main application source were never modified in place.\n' > session2-complete-failure/RECOVERY_NOTICE.txt
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Response-69-Session-2-Complete-Failure-Diagnostics
+          path: session2-complete-failure/
+          if-no-files-found: warn
+          retention-days: 90

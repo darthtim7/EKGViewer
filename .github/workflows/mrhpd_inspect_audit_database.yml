@@ -1,0 +1,23 @@
+name: MRHPD inspect independent audit database gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_inspect_audit_database.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and inspect audit database gate
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 https://at.adobe.com/A6kphh4trMBRHjJ2 -o audit.py
+          grep -n 'EXPECTED_.*RECORD\|EXPECTED_FRACTIONAL\|def verify_database\|recovery_events\|response_records\|fractional_prompts' audit.py || true
+          nl -ba audit.py | sed -n '285,350p'

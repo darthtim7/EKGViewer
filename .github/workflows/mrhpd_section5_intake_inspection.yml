@@ -1,0 +1,193 @@
+name: MRHPD Section 5 intake inspection
+
+on:
+  push:
+    branches:
+      - mrhpd-section5-runner-20260801
+    paths:
+      - .github/workflows/mrhpd_section5_intake_inspection.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-response72:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out isolated execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install inspection dependencies
+        run: |
+          python -m pip install --disable-pip-version-check openpyxl==3.1.5 pypdf==5.9.0 python-docx==1.2.0
+
+      - name: Download Response 72 complete restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-1-of-2-v2
+          path: response72_artifacts/volume1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Download Response 72 complete restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-2-of-2-v2
+          path: response72_artifacts/volume2
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Reconstruct and verify Response 72 project
+        run: |
+          set -euo pipefail
+          mkdir -p response72_reassembly response72_restore response72_project
+          find response72_artifacts -type f -name '*.zip' -print -exec unzip -q -o '{}' -d response72_reassembly \;
+          python response72_reassembly/reassemble_response72_complete_restore.py
+          RESTORE=$(find response72_reassembly -maxdepth 1 -type f -name '*RESTORE THROUGH RESPONSE 72*.zip' -print -quit)
+          test -n "$RESTORE"
+          unzip -q "$RESTORE" -d response72_restore
+          python response72_restore/TOOLS/restore_verify_extract.py --extract-project-to response72_project
+
+      - name: Inspect exact project state
+        run: |
+          set -euo pipefail
+          mkdir -p inspection_output
+          python - <<'PY'
+          from __future__ import annotations
+          from pathlib import Path, PurePosixPath
+          import csv, hashlib, json, os, re, sqlite3, zipfile
+          from collections import Counter
+          from openpyxl import load_workbook
+          from pypdf import PdfReader
+
+          def sha256(path: Path) -> str:
+              h = hashlib.sha256()
+              with path.open('rb') as f:
+                  for block in iter(lambda: f.read(1024 * 1024), b''):
+                      h.update(block)
+              return h.hexdigest()
+
+          base = Path('response72_project')
+          dirs = [p for p in base.iterdir() if p.is_dir()]
+          project = dirs[0] if len(dirs) == 1 else base
+          files = sorted(p for p in project.rglob('*') if p.is_file())
+          by_ext = Counter((p.suffix.lower() or '<none>') for p in files)
+
+          sqlite_candidates = sorted(project.rglob('*.sqlite'), key=lambda p: (p.stat().st_mtime_ns, p.stat().st_size), reverse=True)
+          db_summaries = []
+          for db in sqlite_candidates:
+              try:
+                  con = sqlite3.connect(f'file:{db}?mode=ro', uri=True)
+                  integrity = con.execute('PRAGMA integrity_check').fetchone()[0]
+                  fk = list(con.execute('PRAGMA foreign_key_check'))
+                  tables = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+                  views = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='view' ORDER BY name")]
+                  selected = {}
+                  for name in tables:
+                      lname = name.lower()
+                      if any(term in lname for term in ('section4','response','recovery','checkpoint','release','tracking','source','graphic','publication','cover','print','workbook','application')):
+                          cols = [r[1] for r in con.execute(f'PRAGMA table_info("{name}")')]
+                          try:
+                              count = con.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
+                          except Exception:
+                              count = None
+                          selected[name] = {'columns': cols, 'row_count': count}
+                  db_summaries.append({
+                      'path': db.relative_to(project).as_posix(), 'bytes': db.stat().st_size, 'sha256': sha256(db),
+                      'integrity': integrity, 'foreign_key_violations': len(fk), 'table_count': len(tables),
+                      'view_count': len(views), 'tables': tables, 'selected_tables': selected,
+                  })
+                  con.close()
+              except Exception as exc:
+                  db_summaries.append({'path': db.relative_to(project).as_posix(), 'error': repr(exc)})
+
+          xlsx_candidates = sorted(project.rglob('*.xlsx'), key=lambda p: p.stat().st_size, reverse=True)
+          workbook_summaries = []
+          for wb_path in xlsx_candidates[:12]:
+              try:
+                  wb = load_workbook(wb_path, read_only=True, data_only=False)
+                  sheets = list(wb.sheetnames)
+                  formulas = 0
+                  for ws in wb.worksheets:
+                      for row in ws.iter_rows():
+                          for cell in row:
+                              if isinstance(cell.value, str) and cell.value.startswith('='):
+                                  formulas += 1
+                  workbook_summaries.append({
+                      'path': wb_path.relative_to(project).as_posix(), 'bytes': wb_path.stat().st_size,
+                      'sha256': sha256(wb_path), 'sheet_count': len(sheets), 'sheets': sheets, 'formula_cells': formulas,
+                  })
+                  wb.close()
+              except Exception as exc:
+                  workbook_summaries.append({'path': wb_path.relative_to(project).as_posix(), 'error': repr(exc)})
+
+          pdf_summaries = []
+          for pdf in sorted(project.rglob('*.pdf'), key=lambda p: p.stat().st_size, reverse=True)[:25]:
+              try:
+                  reader = PdfReader(str(pdf))
+                  pdf_summaries.append({
+                      'path': pdf.relative_to(project).as_posix(), 'bytes': pdf.stat().st_size,
+                      'sha256': sha256(pdf), 'pages': len(reader.pages),
+                  })
+              except Exception as exc:
+                  pdf_summaries.append({'path': pdf.relative_to(project).as_posix(), 'error': repr(exc)})
+
+          cover_terms = ('cover','spine','wrap','front','back','barcode','printer','press','trim','bleed','cmyk','icc')
+          cover_files = []
+          for p in files:
+              rel = p.relative_to(project).as_posix()
+              low = rel.lower()
+              if any(term in low for term in cover_terms):
+                  cover_files.append({'path': rel, 'bytes': p.stat().st_size, 'sha256': sha256(p)})
+
+          instruction_files = []
+          for p in files:
+              if p.name.lower() in ('instructions.txt','instructions.md'):
+                  instruction_files.append({'path': p.relative_to(project).as_posix(), 'bytes': p.stat().st_size, 'sha256': sha256(p)})
+
+          top_level = []
+          for p in sorted(project.iterdir(), key=lambda q: (not q.is_dir(), q.name.lower())):
+              top_level.append({'name': p.name, 'type': 'directory' if p.is_dir() else 'file', 'bytes': None if p.is_dir() else p.stat().st_size})
+
+          result = {
+              'schema': 'mrhpd-section5-intake-inspection-1.0',
+              'status': 'passed',
+              'project_root': project.as_posix(),
+              'file_count': len(files),
+              'total_bytes': sum(p.stat().st_size for p in files),
+              'extension_counts': dict(sorted(by_ext.items())),
+              'top_level': top_level,
+              'instruction_files': instruction_files,
+              'sqlite': db_summaries,
+              'workbooks': workbook_summaries,
+              'pdfs': pdf_summaries,
+              'cover_and_print_related_files': cover_files,
+              'accepted_predecessor_mutated': False,
+          }
+          out = Path('inspection_output/SECTION5_INTAKE_INSPECTION.json')
+          out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
+          Path('inspection_output/SECTION5_PROJECT_PATHS.txt').write_text('\n'.join(p.relative_to(project).as_posix() for p in files), encoding='utf-8')
+          print(json.dumps({
+              'status':'passed', 'project_files':len(files), 'sqlite_candidates':len(db_summaries),
+              'workbook_candidates':len(workbook_summaries), 'pdf_candidates':len(pdf_summaries),
+              'cover_print_related':len(cover_files)
+          }, indent=2))
+          PY
+
+      - name: Upload Section 5 intake inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Section-5-Intake-Inspection
+          path: inspection_output
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
