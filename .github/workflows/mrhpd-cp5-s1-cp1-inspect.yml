@@ -44,13 +44,15 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30677563971
 
-      - name: Compile inspector
-        run: python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72.py
+      - name: Compile resilient inspector
+        run: |
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72_v2.py
 
       - name: Inspect exact Response 72 project surfaces
         run: |
           set -euo pipefail
-          python mrhpd/cp5/session1/checkpoint1/inspect_response72.py \
+          python mrhpd/cp5/session1/checkpoint1/inspect_response72_v2.py \
             --volume1-dir inputs/volume1 \
             --volume2-dir inputs/volume2 \
             --output-dir inspection_output | tee section5-intake-inspection.log
