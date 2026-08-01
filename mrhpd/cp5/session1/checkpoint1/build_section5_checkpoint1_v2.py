@@ -2,23 +2,33 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 
 import build_section5_checkpoint1 as base
 
+_ORIGINAL_RECOVERY_EVENTS = base.recovery_events
+
 
 def recovered_events(now_iso: str):
-    rows = base.recovery_events(now_iso)
-    rows.append({
-        "event_code": "V3-CP5-S1-REC-178-APPLICATION-AUDIT-PROJECT-ROOT",
-        "condition": "The first copied-tree application audit resolved the project root one parent too high and failed with sqlite3.OperationalError: unable to open database file.",
-        "recovery": "Preserved the exact baseline, corrected the generated audit root from parents[3] to parents[2], restarted from the verified Response 72 restore, and reran all dependent database, workbook, report, index, manifest, package, and clean-apply gates.",
-        "status": "recovered",
-        "recorded_at": now_iso,
-    })
+    rows = _ORIGINAL_RECOVERY_EVENTS(now_iso)
+    rows.extend([
+        {
+            "event_code": "V3-CP5-S1-REC-178-APPLICATION-AUDIT-PROJECT-ROOT",
+            "condition": "The first copied-tree application audit resolved the project root one parent too high and failed with sqlite3.OperationalError: unable to open database file.",
+            "recovery": "Preserved the exact baseline, corrected the generated audit root from parents[3] to parents[2], restarted from the verified Response 72 restore, and reran all dependent database, workbook, report, index, manifest, package, and clean-apply gates.",
+            "status": "recovered",
+            "recorded_at": now_iso,
+        },
+        {
+            "event_code": "V3-CP5-S1-REC-179-RECOVERY-WRAPPER-RECURSION",
+            "condition": "The first recovery wrapper replaced the event function and then called the replaced symbol, producing RecursionError: maximum recursion depth exceeded before project mutation.",
+            "recovery": "Captured the original event function before monkey-patching, appended the new recovery events through that immutable callable, restarted from the exact Response 72 restore, and reran every dependent gate.",
+            "status": "recovered",
+            "recorded_at": now_iso,
+        },
+    ])
     return rows
 
 
