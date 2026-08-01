@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
-path = Path(__file__).resolve().with_name("build_section5_checkpoint2.py")
-text = path.read_text(encoding="utf-8")
+root = Path(__file__).resolve().parent
+builder_path = root / "build_section5_checkpoint2.py"
+reporting_path = root / "section5_checkpoint2_reporting.py"
+text = builder_path.read_text(encoding="utf-8")
 
 # Normalize the conditional mapping unpack used by the page-transform register.
 start_old = '        row = {\n            **transform_rows[index] if index < 537 else {'
@@ -39,8 +41,13 @@ events = [
     ),
     (
         'V3-CP5-S1-REC-190-WORKBOOK-STRUCTURED-VALUE',
-        'The next disposable workbook pass attempted to assign the official-source URL list directly to one Excel cell and openpyxl raised ValueError: Cannot convert the list to Excel.',
+        'The next disposable comprehensive-workbook pass attempted to assign the official-source URL list directly to one Excel cell and openpyxl raised ValueError: Cannot convert the list to Excel.',
         'Preserved the verified database and generated print assets, added deterministic JSON serialization for list, tuple, set, and dictionary cell values, rebuilt the workbook from the verified Checkpoint 1 source, and reran every dependent gate.'
+    ),
+    (
+        'V3-CP5-S1-REC-191-REPORT-REGISTER-STRUCTURED-VALUE',
+        'The subsequent print-production register attempted the same direct list assignment and openpyxl raised ValueError while writing the Selection sheet.',
+        'Preserved the verified copied state, added the same deterministic JSON serialization to the independent checkpoint-register builder, regenerated the DOCX, searchable PDF, XLSX register, rendered report QA, indexes, manifests, recovery package, and clean-application evidence, and reran every gate.'
     ),
 ]
 for event_code, condition, recovery in events:
@@ -57,6 +64,14 @@ for event_code, condition, recovery in events:
 '''
     block = block[:closing] + insertion + block[closing:]
 text = text[:function_start] + block + text[function_end:]
+builder_path.write_text(text, encoding="utf-8")
 
-path.write_text(text, encoding="utf-8")
-print({"status": "passed", "path": str(path)})
+# Apply the same structured-value conversion to the independent XLSX register builder.
+reporting = reporting_path.read_text(encoding="utf-8")
+reporting = reporting.replace(
+    '            ws.append([row.get(header) for header in headers])',
+    '            ws.append([json.dumps(value, ensure_ascii=False, sort_keys=True) if isinstance(value, (dict, list, tuple, set)) else value for value in (row.get(header) for header in headers)])',
+)
+reporting_path.write_text(reporting, encoding="utf-8")
+
+print({"status": "passed", "builder": str(builder_path), "reporting": str(reporting_path)})
