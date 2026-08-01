@@ -1,0 +1,165 @@
+name: MRHPD Section 5 Session 1 Checkpoint 3 complete restore
+
+on:
+  pull_request:
+    paths:
+      - 'mrhpd/cp5/session1/checkpoint3/**'
+      - 'mrhpd/cp5/session1/checkpoint2/**'
+      - '.github/workflows/mrhpd-cp5-s1-cp3-complete.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-session1-complete-restore:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 \
+            pypdf==5.9.0 pymupdf==1.26.4 pillow==12.3.0
+      - name: Download Response 72 complete restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-1-of-2-v2
+          path: inputs/volume1
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+      - name: Download Response 72 complete restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-2-of-2-v2
+          path: inputs/volume2
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+      - name: Download verified Response 76 checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-76-Section-5-Session-1-Checkpoint-2-Recovery-Delivery
+          path: inputs/checkpoint2
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30691506970
+      - name: Normalize and compile builders
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session1/checkpoint2/normalize_checkpoint2_builder.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint2/build_section5_checkpoint2.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint3/build_section5_session1_complete.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint3/verify_section5_session1_complete.py
+      - name: Build Checkpoint 3 and complete Session 1
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session1/checkpoint3/build_section5_session1_complete.py \
+            --volume1-dir inputs/volume1 \
+            --volume2-dir inputs/volume2 \
+            --checkpoint2-dir inputs/checkpoint2 \
+            --dist dist_cp5_s1_cp3 | tee section5-session1-complete-build.log
+      - name: Independently verify Session 1 restore
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session1/checkpoint3/verify_section5_session1_complete.py \
+            dist_cp5_s1_cp3 | tee section5-session1-complete-verification.log
+      - name: Build verification delivery wrapper
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import re, zipfile
+          d = Path('dist_cp5_s1_cp3')
+          files = [
+              d / 'MRHPD v3.0.0a Response 77 Section 5 Session 1 Complete Verification and Controls.zip',
+              d / 'MRHPD v3.0.0a Response 77 Complete Restore Verification.json',
+              d / 'MRHPD_RESPONSE77_SECTION5_SESSION1_COMPLETE_BUILD_SUMMARY.json',
+              d / 'MRHPD v3.0.0a Response 77 Exact File Names.txt',
+              d / 'MRHPD_RESPONSE77_COMPLETE_RESTORE_TRANSPORT_MANIFEST.json',
+              d / 'reassemble_response77_complete_restore.py',
+              Path('section5-session1-complete-build.log'),
+              Path('section5-session1-complete-verification.log'),
+              Path('mrhpd/cp5/session1/checkpoint3/build_section5_session1_complete.py'),
+              Path('mrhpd/cp5/session1/checkpoint3/verify_section5_session1_complete.py'),
+          ]
+          missing = [str(path) for path in files if not path.exists()]
+          if missing:
+              raise SystemExit({'missing': missing})
+          wrapper = d / 'MRHPD v3.0.0a Response 77 Section 5 Session 1 Complete Verification Delivery.zip'
+          with zipfile.ZipFile(wrapper, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6, allowZip64=True) as zf:
+              for path in files:
+                  zf.write(path, path.name)
+          with zipfile.ZipFile(wrapper) as zf:
+              if zf.testzip() is not None:
+                  raise SystemExit('verification delivery CRC failure')
+              names = zf.namelist()
+              if len(names) != len(set(names)):
+                  raise SystemExit('verification delivery duplicate members')
+              for name in names:
+                  pp = PurePosixPath(name.replace('\\', '/'))
+                  if pp.is_absolute() or '..' in pp.parts or re.match(r'^[A-Za-z]:', name):
+                      raise SystemExit('unsafe member: ' + name)
+          if wrapper.stat().st_size >= 104_857_600:
+              raise SystemExit('verification delivery exceeds Drive connector ceiling')
+          print({'wrapper': wrapper.name, 'bytes': wrapper.stat().st_size, 'members': len(files)})
+          PY
+      - name: Upload Response 77 complete restore volume 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-1
+          path: dist_cp5_s1_cp3/MRHPD v3.0.0a Response 77 Complete Restore Drive Volume 1 of *.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Upload Response 77 complete restore volume 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-2
+          path: dist_cp5_s1_cp3/MRHPD v3.0.0a Response 77 Complete Restore Drive Volume 2 of *.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Upload Response 77 complete restore volume 3
+        if: ${{ hashFiles('dist_cp5_s1_cp3/MRHPD v3.0.0a Response 77 Complete Restore Drive Volume 3 of *.zip') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-3
+          path: dist_cp5_s1_cp3/MRHPD v3.0.0a Response 77 Complete Restore Drive Volume 3 of *.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Upload Response 77 complete restore volume 4
+        if: ${{ hashFiles('dist_cp5_s1_cp3/MRHPD v3.0.0a Response 77 Complete Restore Drive Volume 4 of *.zip') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-4
+          path: dist_cp5_s1_cp3/MRHPD v3.0.0a Response 77 Complete Restore Drive Volume 4 of *.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Upload Response 77 Session 1 verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Section-5-Session-1-Complete-Verification
+          path: dist_cp5_s1_cp3/MRHPD v3.0.0a Response 77 Section 5 Session 1 Complete Verification Delivery.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Preserve failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Session-1-Failure-Diagnostics
+          path: |
+            mrhpd/cp5/session1/checkpoint3
+            section5-session1-complete-build.log
+            section5-session1-complete-verification.log
+            dist_cp5_s1_cp3
+          if-no-files-found: warn
+          retention-days: 30
