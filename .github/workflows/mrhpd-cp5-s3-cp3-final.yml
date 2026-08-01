@@ -110,9 +110,11 @@ jobs:
           PY
           echo "restore=$restore" >> "$GITHUB_OUTPUT"
 
-      - name: Compile terminal builders
+      - name: Normalize and compile terminal builders
         run: |
           set -euo pipefail
+          python -m py_compile mrhpd/cp5/session3/checkpoint3/normalize_section5_project_complete.py
+          python mrhpd/cp5/session3/checkpoint3/normalize_section5_project_complete.py
           python -m py_compile mrhpd/cp5/session3/checkpoint3/build_section5_project_complete.py
           python -m py_compile mrhpd/cp5/session3/checkpoint3/verify_section5_project_complete.py
 
