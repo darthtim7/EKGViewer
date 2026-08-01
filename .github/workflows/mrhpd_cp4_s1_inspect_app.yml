@@ -1,0 +1,67 @@
+name: MRHPD Section 4 application resolver inspection
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/mrhpd_cp4_s1_inspect_app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-application:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified Response 64 restore
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Complete-Restore-Through-Response-64
+          path: base_r64
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30602780836
+      - name: Inspect application and test database resolution
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re,tempfile,zipfile
+          BASE_BYTES=145_920_215
+          BASE_SHA='71e7a06868e82238188827fd73ca7b2843670b0843dcf98ab5ab72305bf77834'
+          FINAL_BYTES=147_057_203
+          FINAL_SHA='2f517e809f49a30808a98491feb19aad20af557eb152db9fbae8603ef70fb402'
+          def sha(p):
+              h=hashlib.sha256()
+              with p.open('rb') as f:
+                  for b in iter(lambda:f.read(1024*1024),b''): h.update(b)
+              return h.hexdigest()
+          base=[p for p in Path('base_r64').rglob('*.zip') if p.stat().st_size==BASE_BYTES and sha(p)==BASE_SHA]
+          assert len(base)==1,base
+          with tempfile.TemporaryDirectory() as td:
+              root=Path(td)
+              with zipfile.ZipFile(base[0]) as zf: zf.extractall(root/'restore')
+              finals=[p for p in (root/'restore').rglob('*FINAL SECTION 3 RELEASE*.zip') if p.stat().st_size==FINAL_BYTES and sha(p)==FINAL_SHA]
+              assert len(finals)==1,finals
+              with zipfile.ZipFile(finals[0]) as zf: zf.extractall(root/'project')
+              apps=list((root/'project').rglob('human_pathogen_app.py'))
+              assert len(apps)==1,apps
+              app=apps[0]
+              lines=app.read_text(encoding='utf-8').splitlines()
+              print('APPLICATION_PATH',app)
+              print('APPLICATION_LINES',len(lines))
+              print('--- APPLICATION RELEVANT LINES ---')
+              for i,line in enumerate(lines,1):
+                  if re.search(r'(?i)(sqlite|database|db_path|dbfile|connect\(|Path\(__file__\)|environ|getenv|add_argument\("--db")',line):
+                      lo=max(1,i-3); hi=min(len(lines),i+3)
+                      print(f'@@ {lo}-{hi}')
+                      for j in range(lo,hi+1): print(f'{j:04d}: {lines[j-1]}')
+              for test in sorted(app.parent.glob('test*.py')):
+                  test_lines=test.read_text(encoding='utf-8').splitlines()
+                  print(f'--- TEST FILE {test.name} ({len(test_lines)} lines) ---')
+                  for i,line in enumerate(test_lines,1):
+                      print(f'{i:04d}: {line}')
+          PY

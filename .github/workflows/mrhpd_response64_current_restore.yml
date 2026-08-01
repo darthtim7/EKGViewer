@@ -1,0 +1,132 @@
+name: MRHPD Response 64 current complete restore
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_response64_current_restore.yml'
+      - 'mrhpd/cp4/session1/checkpoint1/build_response64_restore.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-current-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out isolated recovery branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deterministic document and audit dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 pypdf==5.9.0
+
+      - name: Download verified complete restore through Response 63
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Checkpoint21-Complete-Restore-Through-Response-63
+          path: base_restore
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30598929591
+
+      - name: Build complete self-contained restore through Response 64
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session1/checkpoint1/build_response64_restore.py \
+            --base-dir base_restore --dist dist_r64 | tee response64-build.log
+
+      - name: Verify expected outputs
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json, zipfile
+          d=Path('dist_r64')
+          restores=list(d.glob('*COMPLETE RESTORE THROUGH RESPONSE 64*.zip'))
+          wrappers=list(d.glob('*Drive Volume * of 2.zip'))
+          verification=json.loads((d/'MRHPD v3.0.0a Response 64 Complete Restore Verification.json').read_text())
+          assert len(restores)==1, restores
+          assert len(wrappers)==2, wrappers
+          assert verification['status']=='passed'
+          assert verification['accepted_predecessor_mutated'] is False
+          assert verification['requires_other_project_files'] is False
+          assert verification['requires_conversation_reconstruction'] is False
+          for p in [*restores,*wrappers]:
+              with zipfile.ZipFile(p) as zf:
+                  assert zf.testzip() is None
+                  names=zf.namelist()
+                  assert len(names)==len(set(names))
+          print(json.dumps(verification,indent=2))
+          PY
+
+      - name: Upload complete restore through Response 64
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Complete-Restore-Through-Response-64
+          path: |
+            dist_r64/*COMPLETE RESTORE THROUGH RESPONSE 64*.zip
+            dist_r64/*COMPLETE RESTORE THROUGH RESPONSE 64*.sha256.txt
+            dist_r64/MRHPD v3.0.0a Response 64 Complete Restore Verification.json
+            dist_r64/MRHPD_RESPONSE64_BUILD_SUMMARY.json
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload persistent Drive volume 1 of 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-64-Drive-Volume-1-of-2
+          path: dist_r64/MRHPD v3.0.0a Response 64 Complete Restore Drive Volume 1 of 2.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload persistent Drive volume 2 of 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-64-Drive-Volume-2-of-2
+          path: dist_r64/MRHPD v3.0.0a Response 64 Complete Restore Drive Volume 2 of 2.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload current verification and checkpoint controls
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-64-Verification-and-Controls
+          path: |
+            response64-build.log
+            dist_r64/*.json
+            dist_r64/*.sha256.txt
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p response64-failure
+          cp -f response64-build.log response64-failure/ 2>/dev/null || true
+          find base_restore dist_r64 -maxdepth 4 -type f -printf '%p\t%s bytes\n' > response64-failure/file-inventory.txt 2>/dev/null || true
+          printf 'The accepted predecessor and complete Response 63 restore were never modified in place.\n' > response64-failure/RECOVERY_NOTICE.txt
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Response-64-Failure-Diagnostics
+          path: response64-failure/
+          if-no-files-found: warn
+          retention-days: 90
