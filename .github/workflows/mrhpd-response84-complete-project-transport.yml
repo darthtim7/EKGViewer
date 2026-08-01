@@ -1,0 +1,123 @@
+name: MRHPD Response 84 complete project transport
+
+on:
+  pull_request:
+    branches:
+      - mrhpd-cp5-s3-cp3-final-20260801
+    paths:
+      - 'mrhpd/cp5/session3/checkpoint3/build_response84_complete_project_transport.py'
+      - '.github/workflows/mrhpd-response84-complete-project-transport.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-complete-project-transport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out isolated noncontrolling transport branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download verified complete project artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/project
+          artifact_id="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=MRHPD-v3.0.0a-Response-84-Complete-Project-Artifact-Delivery&per_page=100" \
+            --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].id')"
+          if [[ -z "$artifact_id" || "$artifact_id" == "null" ]]; then
+            echo 'Response 84 complete project artifact not found' >&2
+            exit 1
+          fi
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > inputs/project-artifact.zip
+          unzip -oq inputs/project-artifact.zip -d inputs/project
+          project="$(find inputs/project -maxdepth 2 -type f -name '*ALL SECTIONS COMPLETE PROJECT THROUGH RESPONSE 84*.zip' -print -quit)"
+          if [[ -z "$project" ]]; then
+            echo 'Complete Response 84 project archive missing from artifact' >&2
+            find inputs/project -maxdepth 2 -type f -printf '%p %s\n' >&2
+            exit 1
+          fi
+          echo "$project" > inputs/project-path.txt
+
+      - name: Build and independently verify four-volume project transport
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp5/session3/checkpoint3/build_response84_complete_project_transport.py
+          python mrhpd/cp5/session3/checkpoint3/build_response84_complete_project_transport.py \
+            --project-archive "$(cat inputs/project-path.txt)" \
+            --dist dist_response84_project_transport | tee response84-complete-project-transport.log
+
+      - name: Upload complete project volume 1 of 4
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-84-Complete-Project-Volume-1-of-4
+          path: dist_response84_project_transport/MRHPD v3.0.0a Response 84 Complete Project Drive Volume 1 of 4.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload complete project volume 2 of 4
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-84-Complete-Project-Volume-2-of-4
+          path: dist_response84_project_transport/MRHPD v3.0.0a Response 84 Complete Project Drive Volume 2 of 4.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload complete project volume 3 of 4
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-84-Complete-Project-Volume-3-of-4
+          path: dist_response84_project_transport/MRHPD v3.0.0a Response 84 Complete Project Drive Volume 3 of 4.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload complete project volume 4 of 4
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-84-Complete-Project-Volume-4-of-4
+          path: dist_response84_project_transport/MRHPD v3.0.0a Response 84 Complete Project Drive Volume 4 of 4.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload project transport verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-84-Complete-Project-Transport-Verification
+          path: |
+            dist_response84_project_transport/MRHPD v3.0.0a Response 84 Complete Project Transport Verification.json
+            dist_response84_project_transport/MRHPD_RESPONSE84_COMPLETE_PROJECT_TRANSPORT_MANIFEST.json
+            dist_response84_project_transport/reassemble_response84_complete_project.py
+            response84-complete-project-transport.log
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve transport failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-84-Complete-Project-Transport-Failure-Diagnostics
+          path: |
+            mrhpd/cp5/session3/checkpoint3/build_response84_complete_project_transport.py
+            dist_response84_project_transport
+            response84-complete-project-transport.log
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 6
