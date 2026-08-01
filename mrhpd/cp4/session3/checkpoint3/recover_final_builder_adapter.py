@@ -55,6 +55,10 @@ text = text.replace(
     "Remediation Section 4 of 5 Session 3 of 3 COMPLETE PROJECT THROUGH RESPONSE 69",
     "Remediation Section 4 of 5 Session 3 of 3 COMPLETE PROJECT THROUGH RESPONSE 72",
 )
+text = text.replace(
+    "Remediation Section 4 of 5 Session 3 of 3 COMPLETE RESTORE THROUGH RESPONSE 69",
+    "Remediation Section 4 of 5 COMPLETE Session 3 of 3 COMPLETE RESTORE THROUGH RESPONSE 72",
+)
 if "V3-CP4-S3-REC-FINAL-ARCHIVE-PRIOR-SNAPSHOT-COMPACTION-EXPANDED" not in text:
     _archive_event = r"""    {
         "event_number": 168,
@@ -79,14 +83,30 @@ text = text.replace("RECOVERY_EVENTS_159_167.json", "RECOVERY_EVENTS_159_168.jso
 if archive_marker not in text:
     text = insert_once(text, archive_anchor, archive_block, "final archive compaction recovery")
     applied.append("final archive compaction recovery")
+elif "COMPLETE RESTORE THROUGH RESPONSE 72" not in text:
+    restore_patch = '''text = text.replace(
+    "Remediation Section 4 of 5 Session 3 of 3 COMPLETE RESTORE THROUGH RESPONSE 69",
+    "Remediation Section 4 of 5 COMPLETE Session 3 of 3 COMPLETE RESTORE THROUGH RESPONSE 72",
+)
+'''
+    insertion_point = 'text = text.replace("RECOVERY_EVENTS_159_167.json", "RECOVERY_EVENTS_159_168.json")\n'
+    if insertion_point not in text:
+        raise SystemExit("Response 72 final-restore label insertion target missing")
+    text = text.replace(insertion_point, restore_patch + insertion_point, 1)
+    applied.append("Response 72 complete-restore transport label")
 
 required_old = '    "RECOVERY_EVENTS_159_167.json",\n'
-required_new = '    "RECOVERY_EVENTS_159_168.json",\n    "V3-CP4-S3-REC-FINAL-ARCHIVE-PRIOR-SNAPSHOT-COMPACTION-EXPANDED",\n'
+required_new = '    "RECOVERY_EVENTS_159_168.json",\n    "V3-CP4-S3-REC-FINAL-ARCHIVE-PRIOR-SNAPSHOT-COMPACTION-EXPANDED",\n    "COMPLETE RESTORE THROUGH RESPONSE 72",\n'
 if required_old in text:
     text = text.replace(required_old, required_new, 1)
-    applied.append("Recovery Events 159-168 required markers")
+    applied.append("Recovery Events 159-168 and final-restore required markers")
 elif required_new not in text:
-    raise SystemExit("Recovery Events 159-168 required-marker target missing")
+    required_intermediate = '    "RECOVERY_EVENTS_159_168.json",\n    "V3-CP4-S3-REC-FINAL-ARCHIVE-PRIOR-SNAPSHOT-COMPACTION-EXPANDED",\n'
+    if required_intermediate in text:
+        text = text.replace(required_intermediate, required_new, 1)
+        applied.append("final-restore required marker")
+    else:
+        raise SystemExit("Recovery Events 159-168 required-marker target missing")
 
 if text != original:
     PATH.write_text(text, encoding="utf-8")
