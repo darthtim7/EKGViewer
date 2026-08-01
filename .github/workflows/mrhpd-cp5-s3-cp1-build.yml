@@ -60,7 +60,7 @@ jobs:
           download_named_artifact 'MRHPD-v3.0.0a-Response-81-Complete-Restore-Volume-2-of-3' inputs/artifacts/response81-volume2-artifact.zip
           download_named_artifact 'MRHPD-v3.0.0a-Response-81-Complete-Restore-Volume-3-of-3' inputs/artifacts/response81-volume3-artifact.zip
 
-      - name: Reassemble and verify the exact Response 81 complete restore
+      - name: Reassemble and verify the authoritative Response 81 complete restore
         id: baseline
         shell: bash
         run: |
@@ -86,31 +86,37 @@ jobs:
             cd inputs/reassembly
             python "$(basename "$script")"
           )
-          restore="$(find inputs/reassembly -maxdepth 1 -type f -name '*.zip' -size 267556717c -print -quit)"
+          restore="$(find inputs/reassembly -maxdepth 1 -type f -name '*.zip' -size 267562561c -print -quit)"
           if [[ -z "$restore" ]]; then
-            echo 'Reassembled Response 81 restore not found by exact byte count' >&2
+            echo 'Reassembled Response 81 restore not found by authoritative byte count' >&2
             find inputs/reassembly -maxdepth 2 -type f -printf '%p %s\n' >&2
             exit 1
           fi
           python - "$restore" <<'PY'
           from pathlib import Path
-          import hashlib, sys, zipfile
+          import hashlib, json, sys, zipfile
           path=Path(sys.argv[1])
           h=hashlib.sha256()
           with path.open('rb') as f:
               for block in iter(lambda:f.read(1024*1024),b''):
                   h.update(block)
-          assert path.stat().st_size == 267_556_717
-          assert h.hexdigest() == '519490df412083d3c6c33e952c1a8cfd8f9799fc39bdf34d4a3b34a30f08eec4'
+          assert path.stat().st_size == 267_562_561
+          assert h.hexdigest() == '2e90bb8196a4bbaba100d7924fdb2e88be8ce78c238ce330ca219c7e3cae32b2'
           with zipfile.ZipFile(path) as zf:
               assert zf.testzip() is None
-          print({'status':'passed','restore':str(path),'bytes':path.stat().st_size,'sha256':h.hexdigest()})
+              nested=[]
+              for info in zf.infolist():
+                  if info.filename.lower().endswith('.zip'):
+                      nested.append({'name':info.filename,'bytes':info.file_size})
+          print(json.dumps({'status':'passed','restore':str(path),'bytes':path.stat().st_size,'sha256':h.hexdigest(),'nested_zips':nested},indent=2))
           PY
           echo "restore=$restore" >> "$GITHUB_OUTPUT"
 
-      - name: Compile Session 3 Checkpoint 1 builders
+      - name: Normalize and compile Session 3 Checkpoint 1 builders
         run: |
           set -euo pipefail
+          python -m py_compile mrhpd/cp5/session3/checkpoint1/normalize_section5_session3_checkpoint1.py
+          python mrhpd/cp5/session3/checkpoint1/normalize_section5_session3_checkpoint1.py
           python -m py_compile mrhpd/cp5/session3/checkpoint1/build_section5_session3_checkpoint1.py
           python -m py_compile mrhpd/cp5/session3/checkpoint1/verify_section5_session3_checkpoint1.py
 
@@ -153,7 +159,8 @@ jobs:
             dist_cp5_s3_cp1
             section5-session3-checkpoint1-build.log
             section5-session3-checkpoint1-verification.log
-            inputs/reassembly
+            inputs/reassembly/MRHPD_RESPONSE81_COMPLETE_RESTORE_TRANSPORT_MANIFEST.json
+            inputs/reassembly/reassemble_response81_complete_restore.py
           if-no-files-found: warn
           retention-days: 30
           compression-level: 6
