@@ -1,0 +1,130 @@
+name: MRHPD Section 5 Session 1 Checkpoint 1 recovery
+
+on:
+  pull_request:
+    paths:
+      - 'mrhpd/cp5/session1/checkpoint1/**'
+      - '.github/workflows/mrhpd-cp5-s1-cp1-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-checkpoint-recovery:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deterministic document workbook PDF image and rendering dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 \
+            pypdf==5.9.0 pymupdf==1.26.4 pillow==12.3.0
+
+      - name: Download Response 72 complete restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-1-of-2-v2
+          path: inputs/volume1
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Download Response 72 complete restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-2-of-2-v2
+          path: inputs/volume2
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Apply recorded clean-application path recovery
+        run: |
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/patch_checkpoint1_clean_apply_path.py
+          python mrhpd/cp5/session1/checkpoint1/patch_checkpoint1_clean_apply_path.py
+
+      - name: Compile Section 5 builders
+        run: |
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72_v2.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/section5_checkpoint1_reporting.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/build_section5_checkpoint1.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/build_section5_checkpoint1_v2.py
+
+      - name: Build and clean-verify Response 75 checkpoint recovery
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session1/checkpoint1/build_section5_checkpoint1_v2.py \
+            --volume1-dir inputs/volume1 \
+            --volume2-dir inputs/volume2 \
+            --dist dist_cp5_s1_cp1 | tee section5-checkpoint1-build.log
+
+      - name: Verify emitted delivery package
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, json, re, zipfile
+          def sha(path):
+              h=hashlib.sha256()
+              with path.open('rb') as f:
+                  for b in iter(lambda:f.read(1024*1024),b''): h.update(b)
+              return h.hexdigest()
+          dist=Path('dist_cp5_s1_cp1')
+          deliveries=list(dist.glob('MRHPD v3.0.0a Response 75 Section 5 Session 1 Checkpoint 1 Recovery Package *.zip'))
+          if len(deliveries)!=1: raise SystemExit(f'delivery candidates: {deliveries}')
+          path=deliveries[0]
+          with zipfile.ZipFile(path) as zf:
+              if zf.testzip() is not None: raise SystemExit('delivery CRC failed')
+              names=zf.namelist()
+              if len(names)!=len(set(names)): raise SystemExit('duplicate delivery members')
+              for name in names:
+                  pp=PurePosixPath(name.replace('\\','/'))
+                  if pp.is_absolute() or '..' in pp.parts or re.match(r'^[A-Za-z]:',name): raise SystemExit('unsafe member '+name)
+              required=['Recovery Verification.json','BUILD_SUMMARY.json','Exact File Names.txt','.sha256.txt']
+              for token in required:
+                  if not any(token in name for name in names): raise SystemExit('missing delivery control '+token)
+          summary=json.loads((dist/'MRHPD_RESPONSE75_SECTION5_CHECKPOINT1_BUILD_SUMMARY.json').read_text())
+          if summary['status']!='passed' or not summary['recovery']['clean_apply']['status']=='passed': raise SystemExit('summary gate failed')
+          print(json.dumps({'status':'passed','delivery':path.name,'bytes':path.stat().st_size,'sha256':sha(path),'members':len(names),'database_tables':summary['database']['table_count'],'workbook_sheets':summary['workbook']['current_sheet_count'],'publication_pages':summary['publication']['page_count'],'production_pages':summary['publication']['production_page_count'],'user_upload_required':summary['user_upload_required']},indent=2))
+          PY
+
+      - name: Upload Response 75 checkpoint recovery delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-75-Section-5-Session-1-Checkpoint-1-Recovery-Delivery
+          path: |
+            dist_cp5_s1_cp1/MRHPD v3.0.0a Response 75 Section 5 Session 1 Checkpoint 1 Recovery Package *.zip
+            dist_cp5_s1_cp1/MRHPD v3.0.0a Response 75 Checkpoint 1 Recovery Verification.json
+            dist_cp5_s1_cp1/MRHPD_RESPONSE75_SECTION5_CHECKPOINT1_BUILD_SUMMARY.json
+            dist_cp5_s1_cp1/MRHPD v3.0.0a Response 75 Exact File Names.txt
+            section5-checkpoint1-build.log
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p failure_diagnostics
+          cp -f section5-checkpoint1-build.log failure_diagnostics/ 2>/dev/null || true
+          find dist_cp5_s1_cp1 -maxdepth 1 -type f -size -20M -exec cp -f {} failure_diagnostics/ \; 2>/dev/null || true
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-75-Section-5-Checkpoint-1-Failure-Diagnostics
+          path: failure_diagnostics
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 6
