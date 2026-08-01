@@ -29,6 +29,21 @@ def main() -> None:
 
     text, changed = replace_once(
         text,
+        '''def json_write(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, ensure_ascii=False), encoding="utf-8")
+''',
+        '''def json_write(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+''',
+        "serialize Path and other governed scalar-like values in JSON controls",
+    )
+    if changed:
+        applied.append("serialize Path and other governed scalar-like values in JSON controls")
+
+    text, changed = replace_once(
+        text,
         '''    wb.calculation.fullCalcOnLoad = True
     wb.calculation.forceFullCalc = True
     wb.save(destination)
