@@ -1,0 +1,60 @@
+name: MRHPD Section 5 intake report PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/mrhpd_section5_intake_report_pr.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  report-intake:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download Section 5 intake inspection
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-Section-5-Intake-Inspection-PR
+          path: intake
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30683165348
+
+      - name: Print exact Section 5 intake details
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          path = next(Path('intake').rglob('SECTION5_INTAKE_INSPECTION.json'))
+          data = json.loads(path.read_text(encoding='utf-8'))
+          report = {
+              'status': data['status'],
+              'project_root': data['project_root'],
+              'file_count': data['file_count'],
+              'total_bytes': data['total_bytes'],
+              'top_level': data['top_level'],
+              'instruction_files': data['instruction_files'],
+              'sqlite': [
+                  {
+                      'path': row.get('path'),
+                      'bytes': row.get('bytes'),
+                      'sha256': row.get('sha256'),
+                      'integrity': row.get('integrity'),
+                      'foreign_key_violations': row.get('foreign_key_violations'),
+                      'table_count': row.get('table_count'),
+                      'view_count': row.get('view_count'),
+                      'selected_tables': row.get('selected_tables'),
+                  }
+                  for row in data['sqlite'][:12]
+              ],
+              'workbooks': data['workbooks'][:12],
+              'pdfs': data['pdfs'][:25],
+              'cover_and_print_related_files': data['cover_and_print_related_files'],
+          }
+          print(json.dumps(report, indent=2, ensure_ascii=False))
+          PY
