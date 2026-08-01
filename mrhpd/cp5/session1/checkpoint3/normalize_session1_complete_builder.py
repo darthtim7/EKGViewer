@@ -49,6 +49,21 @@ def main() -> None:
 
     text, changed = replace_once(
         text,
+        '''    pk_columns = {row[1] for row in info if row[5]}
+    source = con.execute(f"SELECT * FROM {table} WHERE {where_column}=?", (source_value,)).fetchone()
+''',
+        '''    # Exclude only integer rowid-style primary keys. Text business keys
+    # such as checkpoint_code must remain in the cloned insert.
+    pk_columns = {row[1] for row in info if row[5] and str(row[2] or "").upper() == "INTEGER"}
+    source = con.execute(f"SELECT * FROM {table} WHERE {where_column}=?", (source_value,)).fetchone()
+''',
+        "preserve text business-key primary columns during row cloning",
+    )
+    if changed:
+        applied.append("preserve text business-key primary columns during row cloning")
+
+    text, changed = replace_once(
+        text,
         '''                (RELEASE_CODE, key, path.relative_to(path.parents[len(path.parts) - len(path.parts)] if False else destination.parents[1]).as_posix() if False else str(path), path.stat().st_size, sha256_file(path), int(immutable), "passed", now_iso),
 ''',
         '''                (RELEASE_CODE, key, path.relative_to(destination.parents[1]).as_posix(), path.stat().st_size, sha256_file(path), int(immutable), "passed", now_iso),
