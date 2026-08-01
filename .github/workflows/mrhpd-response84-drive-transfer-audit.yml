@@ -1,0 +1,57 @@
+name: MRHPD Response 84 Drive transfer audit
+
+on:
+  pull_request:
+    branches:
+      - mrhpd-cp5-s3-cp3-final-20260801
+    paths:
+      - '.github/workflows/mrhpd-response84-drive-transfer-audit.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit-final-artifact-downloads:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out isolated transport branch
+        uses: actions/checkout@v4
+
+      - name: Download and audit final restore volume 4 artifact response
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_id=8822257587
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > response84-restore-volume4-artifact-download.zip
+          stat --printf='bytes=%s\n' response84-restore-volume4-artifact-download.zip
+          sha256sum response84-restore-volume4-artifact-download.zip
+          unzip -t response84-restore-volume4-artifact-download.zip
+          python - <<'PY'
+          import hashlib, json, zipfile
+          from pathlib import Path
+          path=Path('response84-restore-volume4-artifact-download.zip')
+          h=hashlib.sha256(path.read_bytes()).hexdigest()
+          with zipfile.ZipFile(path) as zf:
+              bad=zf.testzip()
+              members=[{'name':i.filename,'bytes':i.file_size,'compressed_bytes':i.compress_size} for i in zf.infolist() if not i.is_dir()]
+          result={'status':'passed' if bad is None else 'failed','bytes':path.stat().st_size,'sha256':h,'crc_error':bad,'members':members}
+          Path('MRHPD_RESPONSE84_RESTORE_VOLUME4_DOWNLOAD_AUDIT.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(result,indent=2))
+          raise SystemExit(0 if result['status']=='passed' else 1)
+          PY
+
+      - name: Upload transfer audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-84-Drive-Transfer-Audit
+          path: |
+            MRHPD_RESPONSE84_RESTORE_VOLUME4_DOWNLOAD_AUDIT.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
