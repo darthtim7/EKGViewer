@@ -24,6 +24,11 @@ events = [
         "Pre-execution review of the corrected list anchor found that the inserted tuple text lacked a leading line break and would have been concatenated to the preceding tuple line.",
         "Corrected the insertion text to begin on its own logical line before the events-list terminator, retained the compile gate, and prevented the predictable malformed-source failure from reaching the substantive build.",
     ),
+    (
+        "V3-CP5-S2-REC-212-PREVIEW-EVIDENCE-SUMMARY-FIELD",
+        "The next independent verification pass found that the build summary exposed the verified preview-evidence count as evidence_records while the verifier required preview_evidence_records; every substantive build, clean-application, database, workbook, publication, print, cover, application, report, proof-plan, and checkpoint gate had passed.",
+        "Preserved the completed copied project and package, made the verifier schema-aware by accepting either governed count field while retaining the exact value of eight and the zero unsupported-approval requirement, recorded this recovery event, and reran the full build, clean application, independent verification, packaging, and custody workflow.",
+    ),
 ]
 insertions = []
 for event_code, condition, recovery in events:
