@@ -28,6 +28,13 @@ def recovered_events(now_iso: str):
             "status": "recovered",
             "recorded_at": now_iso,
         },
+        {
+            "event_code": "V3-CP5-S1-REC-180-CLEAN-APPLY-ABSOLUTE-PATH",
+            "condition": "The first clean-application test passed a relative apply-script path while also changing the working directory to the recovery package, duplicating the path and failing with Errno 2 before the verifier started.",
+            "recovery": "Resolved the generated apply utility to an absolute path, preserved the completed copied-tree work as disposable evidence, restarted from the exact Response 72 restore, and reran all database, workbook, report, index, manifest, package, and clean-application gates.",
+            "status": "recovered",
+            "recorded_at": now_iso,
+        },
     ])
     return rows
 
