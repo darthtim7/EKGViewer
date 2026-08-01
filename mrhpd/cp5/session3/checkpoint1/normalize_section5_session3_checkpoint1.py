@@ -74,19 +74,22 @@ text = text.replace(
 )
 
 if "V3-CP5-S3-REC-241-RESPONSE81-STALE-INDEX-IDENTITY" not in text:
-    start = text.index("def recovery_events(now_iso: str)")
-    end = text.index("\n\ndef sync_database", start)
-    block = text[start:end]
-    closing = block.rfind("\n    ]")
-    if closing < 0:
-        raise RuntimeError("recovery-event list closing not found")
-    event = (
-        "\n        (241, \"V3-CP5-S3-REC-241-RESPONSE81-STALE-INDEX-IDENTITY\", "
-        "\"The first Session 3 recovery run downloaded the newest Response 81 transport artifacts, whose authoritative manifest reconstructed a 15:34 UTC restore, while the older Google Drive delivery index still listed the prior 14:57 UTC byte count and SHA-256.\", "
-        "\"Preserved all downloaded volume bytes and the failed disposable run, accepted the included transport manifest and successful reassembler output as authoritative for the newer volume set, updated the exact restore identity, replaced stale embedded-project constants with verified content-based project-archive discovery, and reran all downstream build, clean-apply, and independent-verification gates.\"),"
+    marker = (
+        '        (240, "V3-CP5-S3-REC-240-INDEX-MANIFEST-RECOVERY", "The checkpoint required current discovery, integrity, and deterministic restoration controls.", '
+        '"Rebuilt Source Index, Bit Index, project manifest, checksums, tracking, reports, QA, and the cumulative clean-applicable recovery package through Response 82."),\n'
+        '    ]'
     )
-    block = block[:closing] + event + block[closing:]
-    text = text[:start] + block + text[end:]
+    event = (
+        '        (240, "V3-CP5-S3-REC-240-INDEX-MANIFEST-RECOVERY", "The checkpoint required current discovery, integrity, and deterministic restoration controls.", '
+        '"Rebuilt Source Index, Bit Index, project manifest, checksums, tracking, reports, QA, and the cumulative clean-applicable recovery package through Response 82."),\n'
+        '        (241, "V3-CP5-S3-REC-241-RESPONSE81-STALE-INDEX-IDENTITY", '
+        '"The first Session 3 recovery run downloaded the newest Response 81 transport artifacts, whose authoritative manifest reconstructed a 15:34 UTC restore, while the older Google Drive delivery index still listed the prior 14:57 UTC byte count and SHA-256.", '
+        '"Preserved all downloaded volume bytes and the failed disposable run, accepted the included transport manifest and successful reassembler output as authoritative for the newer volume set, updated the exact restore identity, replaced stale embedded-project constants with verified content-based project-archive discovery, and reran all downstream build, clean-apply, and independent-verification gates."),\n'
+        '    ]'
+    )
+    if marker not in text:
+        raise RuntimeError("Recovery Event 240 marker not found")
+    text = text.replace(marker, event, 1)
 text = text.replace('"RECOVERY_EVENTS_232_240.json"', '"RECOVERY_EVENTS_232_241.json"')
 
 BUILDER.write_text(text, encoding="utf-8")
