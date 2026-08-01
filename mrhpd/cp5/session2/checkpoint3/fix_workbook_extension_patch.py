@@ -14,6 +14,15 @@ text = text.replace(
 # The generated builder needs a true regex word boundary, not a literal backslash-b sequence.
 text = text.replace(r'extLst\\b', r'extLst\b')
 
+# Namespace declarations must be copied from the worksheet root element, not
+# from the XML declaration at the beginning of the part.
+old = '''    source_open_end = source_xml.find(b">")\n    destination_open_end = destination_xml.find(b">")\n    if source_open_end < 0 or destination_open_end < 0:\n        raise RuntimeError("worksheet root tag missing")\n    source_open = source_xml[: source_open_end + 1]\n    destination_open = destination_xml[: destination_open_end + 1]\n'''
+new = '''    source_root = re.search(rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?worksheet\\b", source_xml)\n    destination_root = re.search(rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?worksheet\\b", destination_xml)\n    if source_root is None or destination_root is None:\n        raise RuntimeError("worksheet root tag missing")\n    source_open_end = source_xml.find(b">", source_root.start())\n    destination_open_end = destination_xml.find(b">", destination_root.start())\n    if source_open_end < 0 or destination_open_end < 0:\n        raise RuntimeError("worksheet root tag termination missing")\n    source_open = source_xml[source_root.start() : source_open_end + 1]\n    destination_open = destination_xml[destination_root.start() : destination_open_end + 1]\n'''
+if 'source_root = re.search' not in text:
+    if old not in text:
+        raise RuntimeError("worksheet-root namespace anchor not found")
+    text = text.replace(old, new, 1)
+
 # Track the exact expected extension bytes and their donor workbook.
 anchor = '    missing_sheets: list[str] = []\n'
 replacement = (
@@ -70,6 +79,7 @@ print({
     "controls": [
         "recovery_event_insertion",
         "extLst_word_boundary",
+        "worksheet-root_namespace_insertion",
         "current_or_managed-donor_extension_recovery",
         "exact_extension_byte_parity",
     ],
