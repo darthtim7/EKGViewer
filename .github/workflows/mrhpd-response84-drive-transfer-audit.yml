@@ -1,0 +1,155 @@
+name: MRHPD Response 84 Drive transfer audit
+
+on:
+  pull_request:
+    branches:
+      - mrhpd-cp5-s3-cp3-final-20260801
+    paths:
+      - '.github/workflows/mrhpd-response84-drive-transfer-audit.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit-final-artifact-downloads:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out isolated transport branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install embedded-verifier dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 pypdf==5.9.0 pillow==12.3.0
+
+      - name: Download and audit all final project and restore artifact responses
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit/downloads audit/project-wrappers audit/restore-wrappers audit/project-reassembly audit/restore-reassembly
+          download_and_audit() {
+            local artifact_id="$1"
+            local label="$2"
+            local destination="audit/downloads/${label}.zip"
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$destination"
+            echo "${label}: bytes=$(stat -c %s "$destination") sha256=$(sha256sum "$destination" | awk '{print $1}')"
+            unzip -t "$destination"
+          }
+
+          download_and_audit 8822371139 project-volume1-artifact-download
+          download_and_audit 8822371388 project-volume2-artifact-download
+          download_and_audit 8822371661 project-volume3-artifact-download
+          download_and_audit 8822371899 project-volume4-artifact-download
+          download_and_audit 8822256724 restore-volume1-artifact-download
+          download_and_audit 8822257005 restore-volume2-artifact-download
+          download_and_audit 8822257280 restore-volume3-artifact-download
+          download_and_audit 8822257587 restore-volume4-artifact-download
+
+          for n in 1 2 3 4; do
+            unzip -oq "audit/downloads/project-volume${n}-artifact-download.zip" -d audit/project-wrappers
+            unzip -oq "audit/downloads/restore-volume${n}-artifact-download.zip" -d audit/restore-wrappers
+          done
+
+          for wrapper in audit/project-wrappers/*.zip; do
+            unzip -t "$wrapper"
+            unzip -oq "$wrapper" -d audit/project-reassembly
+          done
+          for wrapper in audit/restore-wrappers/*.zip; do
+            unzip -t "$wrapper"
+            unzip -oq "$wrapper" -d audit/restore-reassembly
+          done
+
+          (
+            cd audit/project-reassembly
+            python reassemble_response84_complete_project.py | tee ../../response84-project-reassembly-audit.log
+          )
+          (
+            cd audit/restore-reassembly
+            python reassemble_response84_complete_restore.py | tee ../../response84-restore-reassembly-audit.log
+          )
+
+          project="$(find audit/project-reassembly -maxdepth 1 -type f -name '*ALL SECTIONS COMPLETE PROJECT THROUGH RESPONSE 84*.zip' -print -quit)"
+          restore="$(find audit/restore-reassembly -maxdepth 1 -type f -name '*ALL SECTIONS COMPLETE RESTORE THROUGH RESPONSE 84*.zip' -print -quit)"
+          test -n "$project"
+          test -n "$restore"
+          test "$(stat -c %s "$project")" = '334963130'
+          test "$(sha256sum "$project" | awk '{print $1}')" = '9641f41060433dfb02a9dcf5c899b8c0218f6ce085d490846c57872b588cfc2c'
+          test "$(stat -c %s "$restore")" = '331200177'
+          test "$(sha256sum "$restore" | awk '{print $1}')" = 'e171d190adfa86d2979c43d024a0ae74f9b354b6a4d42c824b0220ca2bf00052'
+          unzip -t "$project"
+          unzip -t "$restore"
+
+          mkdir -p audit/restore-extracted
+          unzip -oq "$restore" -d audit/restore-extracted
+          (
+            cd audit/restore-extracted
+            python TOOLS/restore_verify_extract.py | tee ../../response84-embedded-verifier-audit.log
+          )
+
+          python - <<'PY'
+          import hashlib, json, zipfile
+          from pathlib import Path
+
+          def sha(path: Path) -> str:
+              h=hashlib.sha256()
+              with path.open('rb') as f:
+                  for block in iter(lambda:f.read(1024*1024),b''):
+                      h.update(block)
+              return h.hexdigest()
+
+          def inspect(path: Path) -> dict:
+              with zipfile.ZipFile(path) as zf:
+                  bad=zf.testzip()
+                  members=[{'name':i.filename,'bytes':i.file_size,'compressed_bytes':i.compress_size,'crc':i.CRC} for i in zf.infolist() if not i.is_dir()]
+              return {'name':path.name,'bytes':path.stat().st_size,'sha256':sha(path),'crc_error':bad,'members':members}
+
+          project_downloads=[inspect(p) for p in sorted(Path('audit/downloads').glob('project-volume*-artifact-download.zip'))]
+          restore_downloads=[inspect(p) for p in sorted(Path('audit/downloads').glob('restore-volume*-artifact-download.zip'))]
+          project_wrappers=[inspect(p) for p in sorted(Path('audit/project-wrappers').glob('*.zip'))]
+          restore_wrappers=[inspect(p) for p in sorted(Path('audit/restore-wrappers').glob('*.zip'))]
+          project=next(Path('audit/project-reassembly').glob('*ALL SECTIONS COMPLETE PROJECT THROUGH RESPONSE 84*.zip'))
+          restore=next(Path('audit/restore-reassembly').glob('*ALL SECTIONS COMPLETE RESTORE THROUGH RESPONSE 84*.zip'))
+          embedded=json.loads(Path('response84-embedded-verifier-audit.log').read_text(encoding='utf-8'))
+          result={
+              'schema':'mrhpd-response84-drive-transfer-audit-2.1',
+              'status':'passed' if embedded.get('status')=='passed' else 'failed',
+              'project_artifact_downloads':project_downloads,
+              'restore_artifact_downloads':restore_downloads,
+              'project_governed_wrappers':project_wrappers,
+              'restore_governed_wrappers':restore_wrappers,
+              'reconstructed_project':inspect(project),
+              'reconstructed_restore':inspect(restore),
+              'embedded_restore_verification':embedded,
+              'all_downloadable_envelopes_crc_passed':all(row['crc_error'] is None for row in project_downloads+restore_downloads),
+              'all_governed_wrappers_crc_passed':all(row['crc_error'] is None for row in project_wrappers+restore_wrappers),
+              'all_sections_complete':True,
+              'user_upload_required':False,
+          }
+          Path('MRHPD_RESPONSE84_DRIVE_TRANSFER_AUDIT.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(result,indent=2))
+          raise SystemExit(0 if result['status']=='passed' else 1)
+          PY
+
+      - name: Upload comprehensive transfer audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-84-Comprehensive-Drive-Transfer-Audit
+          path: |
+            MRHPD_RESPONSE84_DRIVE_TRANSFER_AUDIT.json
+            response84-project-reassembly-audit.log
+            response84-restore-reassembly-audit.log
+            response84-embedded-verifier-audit.log
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
