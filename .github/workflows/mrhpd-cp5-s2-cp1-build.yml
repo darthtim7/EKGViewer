@@ -50,9 +50,11 @@ jobs:
           github-token: ${{ github.token }}
           repository: darthtim7/EKGViewer
           run-id: 30694922808
-      - name: Compile Session 2 builders
+      - name: Apply recorded recovery patch and compile Session 2 builders
         run: |
           set -euo pipefail
+          python -m py_compile mrhpd/cp5/session2/checkpoint1/patch_section5_session2_checkpoint1.py
+          python mrhpd/cp5/session2/checkpoint1/patch_section5_session2_checkpoint1.py
           python -m py_compile mrhpd/cp5/session2/checkpoint1/inspect_response77.py
           python -m py_compile mrhpd/cp5/session2/checkpoint1/build_section5_session2_checkpoint1.py
           python -m py_compile mrhpd/cp5/session2/checkpoint1/verify_section5_session2_checkpoint1.py
