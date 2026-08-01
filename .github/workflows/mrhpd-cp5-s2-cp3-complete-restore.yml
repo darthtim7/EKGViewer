@@ -72,6 +72,8 @@ jobs:
           python mrhpd/cp5/session2/checkpoint3/fix_workbook_extension_patch.py
           python -m py_compile mrhpd/cp5/session2/checkpoint3/preserve_workbook_extensions.py
           python mrhpd/cp5/session2/checkpoint3/preserve_workbook_extensions.py
+          python -m py_compile mrhpd/cp5/session2/checkpoint3/record_workbook_namespace_recovery.py
+          python mrhpd/cp5/session2/checkpoint3/record_workbook_namespace_recovery.py
           python -m py_compile mrhpd/cp5/session2/checkpoint1/inspect_response77.py
           python -m py_compile mrhpd/cp5/session2/checkpoint2/build_section5_session2_checkpoint2.py
           python -m py_compile mrhpd/cp5/session2/checkpoint3/build_section5_session2_complete_restore.py
