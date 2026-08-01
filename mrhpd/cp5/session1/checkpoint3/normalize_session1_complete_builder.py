@@ -64,6 +64,29 @@ def main() -> None:
 
     text, changed = replace_once(
         text,
+        '''    for row in rows:
+        ws.append([json.dumps(row.get(header), ensure_ascii=False) if isinstance(row.get(header), (list, dict)) else row.get(header) for header in headers])
+''',
+        '''    for row in rows:
+        values = []
+        for header in headers:
+            value = row.get(header)
+            if isinstance(value, (list, dict, tuple, set)):
+                value = json.dumps(value, ensure_ascii=False, default=str)
+            elif isinstance(value, Path):
+                value = value.as_posix()
+            elif not isinstance(value, (str, int, float, bool, type(None))):
+                value = str(value)
+            values.append(value)
+        ws.append(values)
+''',
+        "normalize path and structured values before Excel insertion",
+    )
+    if changed:
+        applied.append("normalize path and structured values before Excel insertion")
+
+    text, changed = replace_once(
+        text,
         '''                (RELEASE_CODE, key, path.relative_to(path.parents[len(path.parts) - len(path.parts)] if False else destination.parents[1]).as_posix() if False else str(path), path.stat().st_size, sha256_file(path), int(immutable), "passed", now_iso),
 ''',
         '''                (RELEASE_CODE, key, path.relative_to(destination.parents[1]).as_posix(), path.stat().st_size, sha256_file(path), int(immutable), "passed", now_iso),
