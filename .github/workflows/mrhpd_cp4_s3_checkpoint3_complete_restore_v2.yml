@@ -95,6 +95,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile mrhpd/cp4/session3/checkpoint3/session3_checkpoint3_governance.py
+          python -m py_compile mrhpd/cp4/session3/checkpoint3/recover_final_builder_adapter.py
+          python mrhpd/cp4/session3/checkpoint3/recover_final_builder_adapter.py | tee session3-adapter-recovery.log
           python -m py_compile mrhpd/cp4/session3/checkpoint3/prepare_session3_complete_builder.py
           python mrhpd/cp4/session3/checkpoint3/prepare_session3_complete_builder.py | tee session3-builder-generation.log
           python -m py_compile mrhpd/cp4/session3/checkpoint3/build_session3_complete_restore.py
@@ -221,10 +223,12 @@ jobs:
               Path('session2-adapter-recovery.log'),
               Path('session2-builder-generation.log'),
               Path('session2-builder-normalization.log'),
+              Path('session3-adapter-recovery.log'),
               Path('session3-builder-generation.log'),
               Path('session3-section4-complete-build.log'),
               Path('mrhpd/cp4/session3/checkpoint3/prepare_session3_inputs.py'),
               Path('mrhpd/cp4/session3/checkpoint3/session3_checkpoint3_governance.py'),
+              Path('mrhpd/cp4/session3/checkpoint3/recover_final_builder_adapter.py'),
               Path('mrhpd/cp4/session3/checkpoint3/prepare_session3_complete_builder.py'),
               Path('mrhpd/cp4/session3/checkpoint3/build_session3_complete_restore.py'),
           ]
