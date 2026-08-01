@@ -1,0 +1,166 @@
+name: MRHPD Section 5 Session 3 Checkpoint 2 recovery
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mrhpd/cp5/session3/checkpoint2/**'
+      - '.github/workflows/mrhpd-cp5-s3-cp2-build.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-session3-checkpoint2-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned document workbook PDF image and indexing dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 \
+            pypdf==5.9.0 pymupdf==1.26.4 pillow==12.3.0
+
+      - name: Download newest verified Response 81 transport volumes and Response 82 recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/artifacts inputs/response82
+          download_named_artifact() {
+            local artifact_name="$1"
+            local output="$2"
+            local artifact_id
+            artifact_id="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].id')"
+            if [[ -z "$artifact_id" || "$artifact_id" == "null" ]]; then
+              echo "Artifact not found: $artifact_name" >&2
+              exit 1
+            fi
+            echo "Downloading $artifact_name as artifact $artifact_id"
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$output"
+            test -s "$output"
+          }
+          download_named_artifact 'MRHPD-v3.0.0a-Response-81-Complete-Restore-Volume-1-of-3' inputs/artifacts/response81-volume1-artifact.zip
+          download_named_artifact 'MRHPD-v3.0.0a-Response-81-Complete-Restore-Volume-2-of-3' inputs/artifacts/response81-volume2-artifact.zip
+          download_named_artifact 'MRHPD-v3.0.0a-Response-81-Complete-Restore-Volume-3-of-3' inputs/artifacts/response81-volume3-artifact.zip
+          download_named_artifact 'MRHPD-v3.0.0a-Response-82-Section-5-Session-3-Checkpoint-1-Recovery-Delivery' inputs/artifacts/response82-artifact.zip
+          unzip -oq inputs/artifacts/response82-artifact.zip -d inputs/response82
+
+      - name: Reassemble and verify the authoritative Response 81 complete restore
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/reassembly
+          for n in 1 2 3; do
+            outer="inputs/outer-${n}"
+            mkdir -p "$outer"
+            unzip -oq "inputs/artifacts/response81-volume${n}-artifact.zip" -d "$outer"
+            inner="$(find "$outer" -type f -name '*.zip' -print -quit)"
+            if [[ -z "$inner" ]]; then
+              echo "No governed inner volume wrapper in artifact $n" >&2
+              exit 1
+            fi
+            unzip -oq "$inner" -d inputs/reassembly
+          done
+          script="$(find inputs/reassembly -type f -name 'reassemble_response81_complete_restore.py' -print -quit)"
+          if [[ -z "$script" ]]; then
+            echo 'Response 81 reassembler missing' >&2
+            exit 1
+          fi
+          (
+            cd inputs/reassembly
+            python "$(basename "$script")"
+          )
+          restore="$(find inputs/reassembly -maxdepth 1 -type f -name '*.zip' -size 267562561c -print -quit)"
+          if [[ -z "$restore" ]]; then
+            echo 'Reassembled Response 81 restore not found by authoritative byte count' >&2
+            find inputs/reassembly -maxdepth 2 -type f -printf '%p %s\n' >&2
+            exit 1
+          fi
+          python - "$restore" <<'PY'
+          from pathlib import Path
+          import hashlib, json, sys, zipfile
+          path=Path(sys.argv[1])
+          h=hashlib.sha256()
+          with path.open('rb') as handle:
+              for block in iter(lambda:handle.read(1024*1024),b''):
+                  h.update(block)
+          assert path.stat().st_size == 267_562_561
+          assert h.hexdigest() == '2e90bb8196a4bbaba100d7924fdb2e88be8ce78c238ce330ca219c7e3cae32b2'
+          with zipfile.ZipFile(path) as zf:
+              assert zf.testzip() is None
+          print(json.dumps({'status':'passed','restore':str(path),'bytes':path.stat().st_size,'sha256':h.hexdigest()},indent=2))
+          PY
+          echo "restore=$restore" >> "$GITHUB_OUTPUT"
+
+      - name: Normalize and compile Session 3 builders
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp5/session3/checkpoint1/normalize_section5_session3_checkpoint1.py
+          python mrhpd/cp5/session3/checkpoint1/normalize_section5_session3_checkpoint1.py
+          python -m py_compile mrhpd/cp5/session3/checkpoint1/build_section5_session3_checkpoint1.py
+          python -m py_compile mrhpd/cp5/session3/checkpoint2/build_section5_session3_checkpoint2.py
+          python -m py_compile mrhpd/cp5/session3/checkpoint2/verify_section5_session3_checkpoint2.py
+
+      - name: Build and clean-verify Response 83 checkpoint recovery
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session3/checkpoint2/build_section5_session3_checkpoint2.py \
+            --response81-restore "${{ steps.baseline.outputs.restore }}" \
+            --response82-dir inputs/response82 \
+            --dist dist_cp5_s3_cp2 | tee section5-session3-checkpoint2-build.log
+
+      - name: Independently verify emitted outputs
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session3/checkpoint2/verify_section5_session3_checkpoint2.py \
+            dist_cp5_s3_cp2 | tee section5-session3-checkpoint2-verification.log
+
+      - name: Upload Response 83 checkpoint delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-83-Section-5-Session-3-Checkpoint-2-Recovery-Delivery
+          path: |
+            dist_cp5_s3_cp2/MRHPD v3.0.0a Response 83 Section 5 Session 3 Checkpoint 2 Recovery Package *.zip
+            dist_cp5_s3_cp2/MRHPD v3.0.0a Response 83 Checkpoint 2 Recovery Verification.json
+            dist_cp5_s3_cp2/MRHPD v3.0.0a Response 83 Checkpoint 2 Independent Verification.json
+            dist_cp5_s3_cp2/MRHPD_RESPONSE83_SECTION5_SESSION3_CHECKPOINT2_BUILD_SUMMARY.json
+            dist_cp5_s3_cp2/MRHPD v3.0.0a Response 83 Exact File Names.txt
+            section5-session3-checkpoint2-build.log
+            section5-session3-checkpoint2-verification.log
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-83-Section-5-Session-3-Checkpoint-2-Failure-Diagnostics
+          path: |
+            mrhpd/cp5/session3/checkpoint2
+            dist_cp5_s3_cp2
+            section5-session3-checkpoint2-build.log
+            section5-session3-checkpoint2-verification.log
+            inputs/reassembly/MRHPD_RESPONSE81_COMPLETE_RESTORE_TRANSPORT_MANIFEST.json
+            inputs/reassembly/reassemble_response81_complete_restore.py
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 6
