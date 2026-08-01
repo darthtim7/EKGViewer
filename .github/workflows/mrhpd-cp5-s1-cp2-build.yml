@@ -47,15 +47,19 @@ jobs:
           run-id: 30684701837
       - name: Normalize and compile builders
         run: |
+          set -euo pipefail
           python mrhpd/cp5/session1/checkpoint2/normalize_checkpoint2_builder.py
           python -m py_compile mrhpd/cp5/session1/checkpoint2/section5_checkpoint2_reporting.py
           python -m py_compile mrhpd/cp5/session1/checkpoint2/build_section5_checkpoint2.py
           python -m py_compile mrhpd/cp5/session1/checkpoint2/verify_checkpoint2_outputs.py
       - name: Build checkpoint
         run: |
+          set -euo pipefail
           python mrhpd/cp5/session1/checkpoint2/build_section5_checkpoint2.py --volume1-dir inputs/volume1 --volume2-dir inputs/volume2 --checkpoint1-dir inputs/checkpoint1 --dist dist_cp5_s1_cp2 | tee section5-checkpoint2-build.log
       - name: Independently verify outputs
-        run: python mrhpd/cp5/session1/checkpoint2/verify_checkpoint2_outputs.py dist_cp5_s1_cp2 | tee section5-checkpoint2-verification.log
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session1/checkpoint2/verify_checkpoint2_outputs.py dist_cp5_s1_cp2 | tee section5-checkpoint2-verification.log
       - name: Upload checkpoint delivery
         uses: actions/upload-artifact@v4
         with:
@@ -78,6 +82,7 @@ jobs:
           path: |
             mrhpd/cp5/session1/checkpoint2
             section5-checkpoint2-build.log
+            section5-checkpoint2-verification.log
             dist_cp5_s1_cp2
           if-no-files-found: warn
           retention-days: 30
