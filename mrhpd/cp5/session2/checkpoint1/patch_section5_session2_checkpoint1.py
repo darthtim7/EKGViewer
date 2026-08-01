@@ -4,16 +4,30 @@ from pathlib import Path
 path = Path(__file__).resolve().parent / "build_section5_session2_checkpoint1.py"
 text = path.read_text(encoding="utf-8")
 
-# Record the independent-verifier recovery so it is carried into the database,
-# workbook, reports, QA, indexes, manifest, and cumulative recovery package.
+# Carry the independent-verifier recoveries into every current project surface.
 function_start = text.index("def recovery_rows(now_iso: str)")
 function_end = text.index("\n\ndef clone_response_row", function_start)
 block = text[function_start:function_end]
-event_code = "V3-CP5-S2-REC-209-INDEPENDENT-VERIFIER-NESTED-REPORT-PATH"
-if event_code not in block:
-    closing = block.rindex("\n    ]")
-    insertion = '''        ("V3-CP5-S2-REC-209-INDEPENDENT-VERIFIER-NESTED-REPORT-PATH", "The first independent output verifier searched the distribution root for report files that were intentionally nested inside the current-turn delivery wrapper and raised StopIteration after the substantive build and clean-application gates had passed.", "Preserved the completed copied project, recovery ZIP, reports, database, workbook, indexes, manifest, and clean-application evidence; changed only the independent verifier to safely extract the delivery wrapper before opening the report PDF and workbook; then reran the complete build, clean application, independent verification, and packaging workflow."),\n'''
-    block = block[:closing] + insertion + block[closing:]
+events = [
+    (
+        "V3-CP5-S2-REC-209-INDEPENDENT-VERIFIER-NESTED-REPORT-PATH",
+        "The first independent output verifier searched the distribution root for report files that were intentionally nested inside the current-turn delivery wrapper and raised StopIteration after the substantive build and clean-application gates had passed.",
+        "Preserved the completed copied project, recovery ZIP, reports, database, workbook, indexes, manifest, and clean-application evidence; changed only the independent verifier to safely extract the delivery wrapper before opening the report PDF and workbook; then reran the complete build, clean application, independent verification, and packaging workflow.",
+    ),
+    (
+        "V3-CP5-S2-REC-210-RECOVERY-PATCH-LIST-ANCHOR",
+        "The first recovery-patch implementation selected the final list terminator in recovery_rows rather than the events-list terminator, inserted the new tuple into the return comprehension, and py_compile raised SyntaxError before the build began.",
+        "Preserved the original builder and all verified prior artifacts, changed the patch to anchor to the first events-list terminator after 'events = [', added a compile gate, and restarted the complete workflow from the immutable Response 77 baseline.",
+    ),
+]
+insertions = []
+for event_code, condition, recovery in events:
+    if event_code not in block:
+        insertions.append(f"        ({event_code!r}, {condition!r}, {recovery!r}),\n")
+if insertions:
+    events_start = block.index("    events = [")
+    closing = block.index("\n    ]", events_start)
+    block = block[:closing] + "".join(insertions) + block[closing:]
     text = text[:function_start] + block + text[function_end:]
 
 # Make all long ReportLab table cells wrap as Paragraph flowables rather than
@@ -34,4 +48,9 @@ for data_name in ("disposition", "preview_data", "proof_data", "check_data"):
         text = text.replace(marker, insertion + marker, 1)
 
 path.write_text(text, encoding="utf-8")
-print({"status": "passed", "builder": str(path), "recovery_event": event_code, "wrapped_tables": ["disposition", "preview_data", "proof_data", "check_data"]})
+print({
+    "status": "passed",
+    "builder": str(path),
+    "recovery_events": [event[0] for event in events],
+    "wrapped_tables": ["disposition", "preview_data", "proof_data", "check_data"],
+})
