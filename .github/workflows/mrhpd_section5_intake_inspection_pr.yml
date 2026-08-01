@@ -1,0 +1,77 @@
+name: MRHPD Section 5 intake inspection PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/mrhpd_section5_intake_inspection_pr.yml
+      - mrhpd/cp5/session1/checkpoint1/inspect_response72.py
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-response72:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out isolated execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install inspection dependencies
+        run: |
+          python -m pip install --disable-pip-version-check openpyxl==3.1.5 pypdf==5.9.0 python-docx==1.2.0
+
+      - name: Download Response 72 complete restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-1-of-2-v2
+          path: response72_artifacts/volume1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Download Response 72 complete restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-2-of-2-v2
+          path: response72_artifacts/volume2
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Reconstruct and verify Response 72 project
+        run: |
+          set -euo pipefail
+          mkdir -p response72_reassembly response72_restore response72_project
+          find response72_artifacts -type f -name '*.zip' -print -exec unzip -q -o '{}' -d response72_reassembly \;
+          python response72_reassembly/reassemble_response72_complete_restore.py
+          RESTORE=$(find response72_reassembly -maxdepth 1 -type f -name '*RESTORE THROUGH RESPONSE 72*.zip' -print -quit)
+          test -n "$RESTORE"
+          unzip -q "$RESTORE" -d response72_restore
+          python response72_restore/TOOLS/restore_verify_extract.py --extract-project-to response72_project
+
+      - name: Inspect exact project state
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72.py
+          python mrhpd/cp5/session1/checkpoint1/inspect_response72.py \
+            --project response72_project \
+            --output inspection_output | tee section5-intake-inspection.log
+          cp section5-intake-inspection.log inspection_output/
+
+      - name: Upload Section 5 intake inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Section-5-Intake-Inspection-PR
+          path: inspection_output
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
