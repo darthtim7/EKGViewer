@@ -85,13 +85,15 @@ def main() -> None:
             register_sheets = len(wb.sheetnames)
         finally:
             wb.close()
+    preview_state = summary.get("provider_previewer", {})
+    preview_count = preview_state.get("preview_evidence_records", preview_state.get("evidence_records"))
     gates = {
         "summary": summary.get("status") == "passed",
         "clean_apply": summary.get("recovery", {}).get("clean_apply", {}).get("status") == "passed",
         "database": summary.get("database", {}).get("integrity") == "ok" and summary.get("database", {}).get("foreign_key_violations") == 0,
         "responses": summary.get("database", {}).get("response78_records") == 1 and summary.get("database", {}).get("response79_records") == 1,
         "workbook": summary.get("workbook", {}).get("current_sheet_count", 0) >= 114 and summary.get("workbook", {}).get("formula_error_count") == 0,
-        "preview_evidence": summary.get("provider_previewer", {}).get("preview_evidence_records") == 8 and summary.get("provider_previewer", {}).get("unsupported_approval_claims") == 0,
+        "preview_evidence": preview_count == 8 and preview_state.get("unsupported_approval_claims") == 0,
         "proof_plan": summary.get("physical_proof", {}).get("plan_records") == 11 and summary.get("physical_proof", {}).get("completed_inspections") == 0,
         "digital_publication": summary.get("digital_publication", {}).get("sha256") == "8a053112ca24cd730b970130d5d0fc57a15c681531603601096186aeb0cd9642" and summary.get("digital_publication", {}).get("pages") == 537,
         "print_interior": summary.get("print_interior", {}).get("sha256") == "0216def4f41b2b62fc2eb3f87f5a66abbf633e54c41b31e2b39afa29c34b0803" and summary.get("print_interior", {}).get("pages") == 538,
@@ -113,7 +115,7 @@ def main() -> None:
         "recovery_zip": summary["recovery"]["recovery_zip"],
         "database_tables": summary["database"]["table_count"],
         "workbook_sheets": summary["workbook"]["current_sheet_count"],
-        "preview_evidence_records": summary["provider_previewer"]["preview_evidence_records"],
+        "preview_evidence_records": preview_count,
         "proof_plan_records": summary["physical_proof"]["plan_records"],
         "provider_approval_claimed": False,
         "physical_proof_claimed": False,
