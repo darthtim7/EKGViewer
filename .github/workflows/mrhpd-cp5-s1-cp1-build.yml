@@ -47,6 +47,11 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30677563971
 
+      - name: Apply recorded clean-application path recovery
+        run: |
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/patch_checkpoint1_clean_apply_path.py
+          python mrhpd/cp5/session1/checkpoint1/patch_checkpoint1_clean_apply_path.py
+
       - name: Compile Section 5 builders
         run: |
           python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72.py
