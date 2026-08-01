@@ -1,0 +1,153 @@
+name: MRHPD Section 5 Session 1 complete restore
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mrhpd/cp5/session1/checkpoint3/**'
+      - '.github/workflows/mrhpd-cp5-s1-cp3-complete-restore.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-session1-complete-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 \
+            pypdf==5.9.0 pymupdf==1.26.4 pillow==12.3.0
+
+      - name: Download Response 72 complete restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-1-of-2-v2
+          path: inputs/volume1
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Download Response 72 complete restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-2-of-2-v2
+          path: inputs/volume2
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Download cumulative Response 76 checkpoint recovery
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-76-Section-5-Session-1-Checkpoint-2-Recovery-Delivery
+          path: inputs/checkpoint2
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30691506970
+
+      - name: Normalize inherited and terminal builders
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session1/checkpoint2/normalize_checkpoint2_builder.py
+          python mrhpd/cp5/session1/checkpoint3/normalize_section5_session1_complete_builder.py
+
+      - name: Compile deterministic builders and independent verifier
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/inspect_response72_v2.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint1/build_section5_checkpoint1.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint2/build_section5_checkpoint2.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint3/build_section5_session1_complete_restore.py
+          python -m py_compile mrhpd/cp5/session1/checkpoint3/verify_section5_session1_complete_outputs.py
+
+      - name: Build Session 1 complete project and restore
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session1/checkpoint3/build_section5_session1_complete_restore.py \
+            --volume1-dir inputs/volume1 \
+            --volume2-dir inputs/volume2 \
+            --checkpoint2-dir inputs/checkpoint2 \
+            --dist dist_cp5_s1_cp3 \
+            | tee section5-session1-complete-build.log
+
+      - name: Independently verify all final outputs
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session1/checkpoint3/verify_section5_session1_complete_outputs.py \
+            dist_cp5_s1_cp3 \
+            | tee section5-session1-complete-verification.log
+
+      - name: Upload complete restore volume 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-78-Complete-Restore-Volume-1-of-2
+          path: dist_cp5_s1_cp3/MRHPD v3.0.0a Response 78 Complete Restore Drive Volume 1 of 2.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload complete restore volume 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-78-Complete-Restore-Volume-2-of-2
+          path: dist_cp5_s1_cp3/MRHPD v3.0.0a Response 78 Complete Restore Drive Volume 2 of 2.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Session 1 verification and controls
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-78-Section-5-Session-1-Complete-Verification
+          path: |
+            dist_cp5_s1_cp3/MRHPD v3.0.0a Response 78 Section 5 Session 1 Complete Verification Delivery *.zip
+            dist_cp5_s1_cp3/MRHPD v3.0.0a Response 78 Section 5 Session 1 Complete Verification.json
+            dist_cp5_s1_cp3/MRHPD_RESPONSE78_SECTION5_SESSION1_COMPLETE_BUILD_SUMMARY.json
+            dist_cp5_s1_cp3/MRHPD v3.0.0a Response 78 Exact File Names.txt
+            section5-session1-complete-build.log
+            section5-session1-complete-verification.log
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload whole restore for isolated execution recovery
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-78-Complete-Restore-Whole
+          path: dist_cp5_s1_cp3/Medical References - Human Pathogen Database v3.0.0a Part 8 of 8 Remediation Section 5 of 5 Session 1 of 3 COMPLETE RESTORE THROUGH RESPONSE 78 *.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p failure_diagnostics
+          cp -f section5-session1-complete-build.log failure_diagnostics/ 2>/dev/null || true
+          cp -f section5-session1-complete-verification.log failure_diagnostics/ 2>/dev/null || true
+          find dist_cp5_s1_cp3 -maxdepth 1 -type f -size -20M -exec cp -f {} failure_diagnostics/ \; 2>/dev/null || true
+          cp -rf mrhpd/cp5/session1/checkpoint3 failure_diagnostics/source 2>/dev/null || true
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-78-Section-5-Session-1-Failure-Diagnostics
+          path: failure_diagnostics
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 6
