@@ -65,9 +65,11 @@ jobs:
           repository: darthtim7/EKGViewer
           run-id: 30703746238
 
-      - name: Compile Session 2 terminal builders
+      - name: Preserve inherited workbook OOXML extensions and compile terminal builders
         run: |
           set -euo pipefail
+          python -m py_compile mrhpd/cp5/session2/checkpoint3/preserve_workbook_extensions.py
+          python mrhpd/cp5/session2/checkpoint3/preserve_workbook_extensions.py
           python -m py_compile mrhpd/cp5/session2/checkpoint1/inspect_response77.py
           python -m py_compile mrhpd/cp5/session2/checkpoint2/build_section5_session2_checkpoint2.py
           python -m py_compile mrhpd/cp5/session2/checkpoint3/build_section5_session2_complete_restore.py
