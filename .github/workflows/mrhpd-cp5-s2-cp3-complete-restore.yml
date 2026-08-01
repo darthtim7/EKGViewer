@@ -68,6 +68,8 @@ jobs:
       - name: Preserve inherited workbook OOXML extensions and compile terminal builders
         run: |
           set -euo pipefail
+          python -m py_compile mrhpd/cp5/session2/checkpoint3/fix_workbook_extension_patch.py
+          python mrhpd/cp5/session2/checkpoint3/fix_workbook_extension_patch.py
           python -m py_compile mrhpd/cp5/session2/checkpoint3/preserve_workbook_extensions.py
           python mrhpd/cp5/session2/checkpoint3/preserve_workbook_extensions.py
           python -m py_compile mrhpd/cp5/session2/checkpoint1/inspect_response77.py
