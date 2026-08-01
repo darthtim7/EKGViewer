@@ -19,11 +19,16 @@ events = [
         "The first recovery-patch implementation selected the final list terminator in recovery_rows rather than the events-list terminator, inserted the new tuple into the return comprehension, and py_compile raised SyntaxError before the build began.",
         "Preserved the original builder and all verified prior artifacts, changed the patch to anchor to the first events-list terminator after 'events = [', added a compile gate, and restarted the complete workflow from the immutable Response 77 baseline.",
     ),
+    (
+        "V3-CP5-S2-REC-211-RECOVERY-PATCH-LINE-BOUNDARY",
+        "Pre-execution review of the corrected list anchor found that the inserted tuple text lacked a leading line break and would have been concatenated to the preceding tuple line.",
+        "Corrected the insertion text to begin on its own logical line before the events-list terminator, retained the compile gate, and prevented the predictable malformed-source failure from reaching the substantive build.",
+    ),
 ]
 insertions = []
 for event_code, condition, recovery in events:
     if event_code not in block:
-        insertions.append(f"        ({event_code!r}, {condition!r}, {recovery!r}),\n")
+        insertions.append(f"\n        ({event_code!r}, {condition!r}, {recovery!r}),")
 if insertions:
     events_start = block.index("    events = [")
     closing = block.index("\n    ]", events_start)
