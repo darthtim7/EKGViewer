@@ -1,0 +1,131 @@
+name: Temporary encrypted MDR fan asset transport
+
+on:
+  pull_request:
+    paths:
+      - 'mdr-encrypted-transport-trigger.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  collect-encrypt-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Collect public fan-made MDR repositories and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/repos output/repository_archives output/sound_collections output/completion_components output/manifests
+          clone_repo() {
+            local slug="$1" url="$2" dest="work/repos/$1"
+            git clone --depth 1 "$url" "$dest"
+            git -C "$dest" rev-parse HEAD > "$dest/SOURCE_COMMIT.txt"
+            git -C "$dest" remote get-url origin > "$dest/SOURCE_URL.txt"
+            rm -rf "$dest/.git"
+            (cd work/repos && zip -r -9 "../../output/repository_archives/${slug}.zip" "$slug" >/dev/null)
+          }
+          clone_repo MilanMolnar_MacroDataRefinement https://github.com/MilanMolnar/MacroDataRefinement.git
+          clone_repo epassi_lumon_macrodata_refiner https://github.com/epassi/lumon-macrodata-refiner.git
+          clone_repo andrewchilicki_LumonMDR https://github.com/andrewchilicki/LumonMDR.git
+          clone_repo kenkunz_svelte_mdr https://github.com/kenkunz/svelte-mdr.git
+          clone_repo VitSoonYoung_macrodata_refiner https://github.com/VitSoonYoung/macrodata-refiner.git
+          clone_repo Lumon_Industries_Macrodata_Refinement https://github.com/scm-repo-mirror/Lumon-Industries_Macrodata-Refinement.git
+          clone_repo nlaha_MacrodataRefinement https://github.com/nlaha/MacrodataRefinement.git
+          clone_repo Liquidream_Lumon8 https://gist.github.com/6c512ea17ff0b3eef7d2d7c58fda9e91.git
+          python - <<'PY'
+          from pathlib import Path
+          import csv, hashlib, json, shutil
+          repos=Path('work/repos'); out=Path('output')
+          audio_ext={'.wav','.mp3','.ogg','.flac','.m4a','.aac','.aif','.aiff','.opus'}
+          terms=('completion','complete','win','final','finale','kier','praise','dance','waffle','party','reward','message','boot','startup','bin','refine','quarter','100')
+          links={
+            'MilanMolnar_MacroDataRefinement':['https://github.com/MilanMolnar/MacroDataRefinement','https://macro-data-refinement-rho.vercel.app/'],
+            'epassi_lumon_macrodata_refiner':['https://github.com/epassi/lumon-macrodata-refiner','https://passi.design/lab/lumon'],
+            'andrewchilicki_LumonMDR':['https://github.com/andrewchilicki/LumonMDR',None],
+            'kenkunz_svelte_mdr':['https://github.com/kenkunz/svelte-mdr','https://mdr.kenthropic.com'],
+            'VitSoonYoung_macrodata_refiner':['https://github.com/VitSoonYoung/macrodata-refiner','https://vitsoonyoung.itch.io/macrodata-refiner'],
+            'Lumon_Industries_Macrodata_Refinement':['https://github.com/scm-repo-mirror/Lumon-Industries_Macrodata-Refinement',None],
+            'nlaha_MacrodataRefinement':['https://github.com/nlaha/MacrodataRefinement',None],
+            'Liquidream_Lumon8':['https://gist.github.com/Liquidream/6c512ea17ff0b3eef7d2d7c58fda9e91','https://liquidream.itch.io/lumon8-1k']}
+          def sha(p):
+            h=hashlib.sha256()
+            with p.open('rb') as f:
+              for c in iter(lambda:f.read(1048576),b''): h.update(c)
+            return h.hexdigest()
+          manifest={'schema':'mdr-fan-made-source-and-assets-collection/1','repositories':[],'audio_files':[],'completion_component_files':[]}
+          for repo in sorted(p for p in repos.iterdir() if p.is_dir()):
+            files=[p for p in repo.rglob('*') if p.is_file()]
+            licenses=[p for p in files if p.name.lower().startswith(('license','copying','copyright'))]
+            audios=[p for p in files if p.suffix.lower() in audio_ext]
+            comps=[p for p in files if any(t in str(p.relative_to(repo)).lower() for t in terms)]
+            for p in audios:
+              rel=p.relative_to(repo); d=out/'sound_collections'/repo.name/rel; d.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(p,d)
+              manifest['audio_files'].append({'repository':repo.name,'path':str(rel),'size_bytes':p.stat().st_size,'sha256':sha(p)})
+            for p in comps:
+              rel=p.relative_to(repo); d=out/'completion_components'/repo.name/rel; d.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(p,d)
+              manifest['completion_component_files'].append({'repository':repo.name,'path':str(rel),'size_bytes':p.stat().st_size,'sha256':sha(p)})
+            source,live=links.get(repo.name,[None,None])
+            manifest['repositories'].append({'name':repo.name,'source_url':source,'live_game_url':live,'commit':(repo/'SOURCE_COMMIT.txt').read_text().strip(),'file_count':len(files),'total_bytes':sum(p.stat().st_size for p in files),'audio_count':len(audios),'completion_component_count':len(comps),'license_files':[str(p.relative_to(repo)) for p in licenses],'license_status':'license file present' if licenses else 'no repository license file located; research/reference only unless separately authorized'})
+          (out/'manifests'/'MDR_FAN_MADE_REPOSITORY_AND_ASSET_MANIFEST.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
+          with (out/'manifests'/'MDR_FAN_MADE_ASSET_INDEX.csv').open('w',newline='',encoding='utf-8') as f:
+            w=csv.writer(f); w.writerow(['category','repository','path','size_bytes','sha256'])
+            for x in manifest['audio_files']: w.writerow(['audio',x['repository'],x['path'],x['size_bytes'],x['sha256']])
+            for x in manifest['completion_component_files']: w.writerow(['completion_or_related_component',x['repository'],x['path'],x['size_bytes'],x['sha256']])
+          PY
+          (cd output/sound_collections && zip -r -9 ../MDR_Fan_Made_Complete_Sound_Collections_1.0.0.zip . >/dev/null)
+          (cd output/completion_components && zip -r -9 ../MDR_Fan_Made_Completion_and_Interaction_Components_1.0.0.zip . >/dev/null)
+          (cd output && zip -r -9 MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip repository_archives sound_collections completion_components manifests >/dev/null)
+          (cd output && sha256sum MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip > PLAINTEXT_COLLECTION_SHA256.txt)
+
+      - name: Encrypt collection for temporary public transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > public_key.pem <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAod4fRzlzal2/JpEUGd5U
+          2gIwrqblXO0x7u7cp1Fw3sNFf6n26w4qBGEqJRqLFjX5J2ucm/CPSHjCNKuDsd1x
+          4ux4I3tE0Zmc0eihdac5Xahb+ZisrkLlw6EKHDwa2qSClQ1KdZok214+EmRD+yBE
+          dh6CnwIsYw/gadJyP15z3H2TaeyGqJauyJpSgf1Fd07CRTKtgdh9cjjdp7UuFkaD
+          9e4A7wfJiNhM0Xzq1789QBCSBv06T/V63HvIs40PUV+r179BVHlNKtRfsDONkJyj
+          LYfzR1Elle9All9GjHtNvI1Xvydn1QsXnE2TbA8AjHDT7SMVVho7OMq0Y2x1KKcE
+          I3SbkdDUP6vqqV5dzZriXQsjj19STNCi5EYKmduz23r12AvGaIlR8DwsWAiMrhkM
+          VxXnFeAk1+X3/2AfGWeJ2QfbUoFTe04/MFX3c/Ahk31JAnMJx+pB177+kcFwx0/g
+          CzLfCPU8pqGYJLxLr72hWX9HZVodIWQtWxiqZ5fTyhlVAgMBAAE=
+          -----END PUBLIC KEY-----
+          PEM
+          openssl rand 32 > aes.key
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 250000 \
+            -in output/MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip \
+            -out MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip.enc \
+            -pass file:aes.key
+          openssl pkeyutl -encrypt -pubin -inkey public_key.pem \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+            -in aes.key -out MDR_Fan_Made_Collection_AES_Key.rsa
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          def rec(p):
+            b=Path(p).read_bytes(); return {'file_name':Path(p).name,'size_bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()}
+          manifest={'schema':'mdr-encrypted-public-transport/1','encryption':'AES-256-CBC PBKDF2 250000 iterations; 32-byte random passphrase wrapped with RSA-3072 OAEP-SHA256','plaintext':rec('output/MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip'),'ciphertext':rec('MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip.enc'),'wrapped_key':rec('MDR_Fan_Made_Collection_AES_Key.rsa'),'public_key_sha256':'32ec89c8cdde9a6274780e8b9ac055d243dbe9b5f690469970adf03070b805a5'}
+          Path('MDR_Fan_Made_Encrypted_Transport_Manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
+          PY
+          rm -f aes.key public_key.pem
+
+      - name: Publish temporary encrypted release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="mdr-encrypted-transport-${GITHUB_RUN_ID}"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target main \
+            --title "Temporary encrypted MDR fan asset transport ${GITHUB_RUN_ID}" \
+            --notes "Contains only encrypted archival bytes and an RSA-wrapped random AES passphrase. No plaintext third-party assets are publicly exposed." \
+            MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip.enc \
+            MDR_Fan_Made_Collection_AES_Key.rsa \
+            MDR_Fan_Made_Encrypted_Transport_Manifest.json
+          echo "RELEASE_TAG=$TAG"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets
