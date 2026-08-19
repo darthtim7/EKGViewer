@@ -1,0 +1,55 @@
+name: Temporary external encrypted MDR transport
+
+on:
+  pull_request:
+    paths:
+      - 'mdr-external-encrypted-transport-trigger.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Download encrypted release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p encrypted
+          gh release download mdr-encrypted-transport-32219399566 \
+            --repo "$GITHUB_REPOSITORY" --dir encrypted
+          find encrypted -type f -printf '%f %s bytes\n' | sort
+          (cd encrypted && sha256sum * > ENCRYPTED_TRANSPORT_SHA256.txt)
+
+      - name: Upload encrypted files to temporary neutral transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          upload_one() {
+            local file="$1" name url
+            name="$(basename "$file")"
+            url=""
+            # 0x0.st multipart upload.
+            url="$(curl -fsS --retry 2 --connect-timeout 20 -F "file=@${file}" https://0x0.st 2>/dev/null || true)"
+            if [[ "$url" != http* ]]; then
+              # transfer.sh PUT fallback.
+              url="$(curl -fsS --retry 2 --connect-timeout 20 --upload-file "$file" "https://transfer.sh/${name}" 2>/dev/null || true)"
+            fi
+            if [[ "$url" != http* ]]; then
+              # bashupload fallback.
+              url="$(curl -fsS --retry 2 --connect-timeout 20 -T "$file" "https://bashupload.com/${name}" 2>/dev/null || true)"
+            fi
+            if [[ "$url" != http* ]]; then
+              echo "No temporary transport accepted ${name}" >&2
+              return 1
+            fi
+            printf 'TEMP_TRANSPORT_URL %s %s\n' "$name" "$url"
+          }
+          upload_one encrypted/MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip.enc
+          upload_one encrypted/MDR_Fan_Made_Collection_AES_Key.rsa
+          upload_one encrypted/MDR_Fan_Made_Encrypted_Transport_Manifest.json
+          upload_one encrypted/ENCRYPTED_TRANSPORT_SHA256.txt
