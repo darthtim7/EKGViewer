@@ -1,0 +1,35 @@
+name: Resolve encrypted MDR transport signed URLs
+
+on:
+  pull_request:
+    paths:
+      - 'mdr-encrypted-signed-url-trigger.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve temporary signed release-asset URLs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          resolve() {
+            local id="$1" name="$2" headers location
+            headers="$(mktemp)"
+            curl -sS -D "$headers" -o /dev/null \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/octet-stream" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/${id}"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/^location:[[:space:]]*/,""); sub(/\r$/,""); print; exit}' "$headers")"
+            test -n "$location"
+            printf 'SIGNED_URL_BASE64 %s %s\n' "$name" "$(printf '%s' "$location" | base64 -w0)"
+          }
+          resolve 520430057 MDR_Fan_Made_Source_and_Assets_Collection_1.0.0.zip.enc
+          resolve 520430059 MDR_Fan_Made_Collection_AES_Key.rsa
+          resolve 520430058 MDR_Fan_Made_Encrypted_Transport_Manifest.json
