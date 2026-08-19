@@ -1,0 +1,48 @@
+name: Temporary MDR fan asset acquisition release
+
+on:
+  pull_request:
+    paths:
+      - 'mdr-fan-assets-trigger.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone and package public fan-made MDR repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p acquired
+          git clone --depth 1 https://github.com/MilanMolnar/MacroDataRefinement.git acquired/MacroDataRefinement
+          git -C acquired/MacroDataRefinement rev-parse HEAD > acquired/SOURCE_COMMIT.txt
+          git -C acquired/MacroDataRefinement remote get-url origin > acquired/SOURCE_URL.txt
+          printf '%s\n' 'Temporary acquisition copy for the MDR terminal project. Upstream provenance retained; no claim of production authenticity or upstream licensing.' > acquired/ACQUISITION_NOTE.txt
+          rm -rf acquired/MacroDataRefinement/.git
+          find acquired/MacroDataRefinement -type f -print0 | sort -z | xargs -0 sha256sum > acquired/FILE_SHA256.txt
+          find acquired/MacroDataRefinement -type f | sort > acquired/FILE_INVENTORY.txt
+          (cd acquired && zip -r -9 ../MilanMolnar_MacroDataRefinement_complete.zip .)
+          (cd acquired/MacroDataRefinement/src/assets && zip -r -9 ../../../../MilanMolnar_MacroDataRefinement_audio_and_assets.zip .)
+          (cd acquired/MacroDataRefinement/src/assets/sounds && zip -r -9 ../../../../../MilanMolnar_MacroDataRefinement_sound_collection.zip .)
+          sha256sum MilanMolnar_MacroDataRefinement_*.zip > ACQUIRED_ARCHIVE_SHA256.txt
+
+      - name: Create temporary public release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="mdr-fan-assets-acquisition-${GITHUB_RUN_ID}"
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target main \
+            --title "Temporary MDR fan asset acquisition ${GITHUB_RUN_ID}" \
+            --notes "Temporary acquisition release for local project archival. Contains a complete copy of the public MilanMolnar/MacroDataRefinement source, all fan-made sounds, and other assets. This is not a claim that any asset is production-authentic or licensed for redistribution." \
+            MilanMolnar_MacroDataRefinement_complete.zip \
+            MilanMolnar_MacroDataRefinement_audio_and_assets.zip \
+            MilanMolnar_MacroDataRefinement_sound_collection.zip \
+            ACQUIRED_ARCHIVE_SHA256.txt
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets
