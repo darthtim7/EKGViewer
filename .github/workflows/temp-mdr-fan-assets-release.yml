@@ -1,4 +1,4 @@
-name: Temporary MDR fan asset acquisition release
+name: Temporary MDR fan reference Drive split
 
 on:
   pull_request:
@@ -6,34 +6,105 @@ on:
       - 'mdr-fan-assets-trigger.txt'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  acquire:
+  package:
     runs-on: ubuntu-latest
     steps:
-      - name: Clone and package Lumon-Industries MDR repository
+      - name: Clone both public fan-made MDR repositories
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p acquired
-          git clone --depth 1 https://github.com/Lumon-Industries/Macrodata-Refinement.git acquired/Macrodata-Refinement
-          git -C acquired/Macrodata-Refinement rev-parse HEAD > acquired/SOURCE_COMMIT.txt
-          git -C acquired/Macrodata-Refinement remote get-url origin > acquired/SOURCE_URL.txt
-          printf '%s\n' 'Temporary acquisition copy for the MDR terminal project. Upstream provenance retained; no claim of production authenticity or upstream licensing.' > acquired/ACQUISITION_NOTE.txt
-          rm -rf acquired/Macrodata-Refinement/.git
-          find acquired/Macrodata-Refinement -type f -print0 | sort -z | xargs -0 sha256sum > acquired/FILE_SHA256.txt
-          find acquired/Macrodata-Refinement -type f | sort > acquired/FILE_INVENTORY.txt
-          (cd acquired && zip -r -9 ../Lumon_Industries_Macrodata_Refinement_complete.zip .)
-          sha256sum Lumon_Industries_Macrodata_Refinement_complete.zip > ACQUIRED_ARCHIVE_SHA256.txt
+          mkdir -p work/milan work/lumon output/part1 output/part2 output/part3
+          git clone --depth 1 https://github.com/MilanMolnar/MacroDataRefinement.git work/milan/repo
+          git clone --depth 1 https://github.com/Lumon-Industries/Macrodata-Refinement.git work/lumon/repo
+          MILAN_COMMIT="$(git -C work/milan/repo rev-parse HEAD)"
+          LUMON_COMMIT="$(git -C work/lumon/repo rev-parse HEAD)"
+          rm -rf work/milan/repo/.git work/lumon/repo/.git
+          printf '%s\n' "$MILAN_COMMIT" > output/part1/MilanMolnar_SOURCE_COMMIT.txt
+          printf '%s\n' "$LUMON_COMMIT" > output/part1/LumonIndustries_SOURCE_COMMIT.txt
+          printf '%s\n' 'https://github.com/MilanMolnar/MacroDataRefinement' > output/part1/MilanMolnar_SOURCE_URL.txt
+          printf '%s\n' 'https://github.com/Lumon-Industries/Macrodata-Refinement' > output/part1/LumonIndustries_SOURCE_URL.txt
+          (cd work/milan && zip -r -9 ../../output/part1/MDR_Fan_MilanMolnar_Complete_Source_1.0.0.zip repo)
+          (cd work/lumon && zip -r -9 ../../output/part1/MDR_Fan_LumonIndustries_Complete_Source_1.0.0.zip repo)
+          (cd work/milan/repo/src/assets && zip -r -9 ../../../../../output/part2/MDR_Fan_MilanMolnar_Audio_and_Assets_1.0.0.zip .)
+          (cd work/milan/repo/src/assets/sounds && zip -r -9 ../../../../../../output/part2/MDR_Fan_MilanMolnar_Sound_Collection_1.0.0.zip .)
+          cp output/part2/MDR_Fan_MilanMolnar_Sound_Collection_1.0.0.zip output/part3/
 
-      - name: Upload acquisition as workflow artifact
+          python - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, html, json
+
+          root = Path('work/milan/repo/src/assets/sounds')
+          out = Path('output')
+          roles = {
+              'open.mp3':'bin opening — priority fan candidate',
+              'close.mp3':'bin closing — priority fan candidate',
+              'hover.mp3':'number hover/reaction — priority fan candidate',
+              'win-final.mp3':'primary completion reference',
+              'win-long.mp3':'extended completion reference',
+              'win.mp3':'short completion reference',
+              'flip.mp3':'control flip reference',
+              'hinge_flip.mp3':'Rolodex hinge reference',
+              'hinged_flip.mp3':'alternate hinge reference',
+              'binit.mp3':'generic fly-to-bin reference; not exact',
+              'typing.mp3':'generic typing reference; not exact',
+              's.mp3':'unmapped short fan cue',
+              'Initiate_refinement.mp3':'long-form fan sequence music',
+              'Innie_enterance.mp3':'long-form fan entrance music',
+              'MDR_file_assignment.mp3':'fan file-assignment remix',
+              'Music_dance_exp.mp3':'fan music dance experience',
+              'music.mp3':'fan background music',
+          }
+          records=[]; cards=[]
+          for path in sorted(root.glob('*.mp3')):
+              data=path.read_bytes(); digest=hashlib.sha256(data).hexdigest()
+              role=roles.get(path.name,'fan cue')
+              records.append({'file':path.name,'size_bytes':len(data),'sha256':digest,'role':role})
+              b64=base64.b64encode(data).decode('ascii')
+              cards.append(f'''<article data-search="{html.escape((path.name+' '+role).lower())}"><h2>{html.escape(path.name)}</h2><p>{html.escape(role)}</p><audio controls preload="none" src="data:audio/mpeg;base64,{b64}"></audio><code>{digest}</code></article>''')
+          page=f'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MDR Fan Audio Audition Library</title><style>*{{box-sizing:border-box}}body{{margin:0;background:#071013;color:#eef7f6;font:16px system-ui}}header{{position:sticky;top:0;background:#071013ee;padding:20px;border-bottom:1px solid #35686c}}h1,h2{{color:#89e7e7}}input{{width:100%;padding:12px;background:#0d2024;color:white;border:1px solid #35686c}}main{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;padding:20px}}article{{background:#0d2024;border:1px solid #35686c;border-radius:10px;padding:16px}}audio{{width:100%}}code{{display:block;overflow-wrap:anywhere;font-size:11px;color:#a7bebe}}.hide{{display:none}}</style></head><body><header><h1>MDR Fan Audio Audition Library 1.0.0</h1><p>Complete 17-file MilanMolnar fan-game collection. Fan-reference assets; not certified Apple production masters.</p><input id="q" placeholder="Search"></header><main>{''.join(cards)}</main><script>const q=document.querySelector('#q'),a=[...document.querySelectorAll('article')];q.oninput=()=>a.forEach(x=>x.classList.toggle('hide',!x.dataset.search.includes(q.value.toLowerCase())));document.querySelectorAll('audio').forEach(x=>x.onplay=()=>document.querySelectorAll('audio').forEach(y=>{{if(y!==x)y.pause()}}));</script></body></html>'''
+          (out/'part3'/'MDR_Fan_Audio_Audition_Library_1.0.0.html').write_text(page,encoding='utf-8')
+          (out/'part3'/'MDR_Fan_Audio_Inventory_1.0.0.json').write_text(json.dumps(records,indent=2),encoding='utf-8')
+          provenance={
+              'schema':'mdr-fan-reference-drive-split/1',
+              'milan':{'source':'https://github.com/MilanMolnar/MacroDataRefinement','play':'https://macro-data-refinement-rho.vercel.app/'},
+              'lumon':{'source':'https://github.com/Lumon-Industries/Macrodata-Refinement','play':'https://lumon-industries.com'},
+              'boundary':'Complete public fan references. No production authenticity or upstream redistribution license is inferred.'
+          }
+          for part in ('part1','part2','part3'):
+              (out/part/'PROVENANCE.json').write_text(json.dumps(provenance,indent=2),encoding='utf-8')
+              (out/part/'README_FIRST.txt').write_text('MDR Fan Reference Collection 1.0.0 — Drive split. Preserve complete. Fan references are not automatically production-authentic.\n',encoding='utf-8')
+          PY
+
+          find output/part1 -type f -print0 | sort -z | xargs -0 sha256sum > output/part1/SHA256.txt
+          find output/part2 -type f -print0 | sort -z | xargs -0 sha256sum > output/part2/SHA256.txt
+          find output/part3 -type f -print0 | sort -z | xargs -0 sha256sum > output/part3/SHA256.txt
+
+      - name: Upload Drive Part 1 — source code
         uses: actions/upload-artifact@v4
         with:
-          name: Lumon-Industries-Macrodata-Refinement-project-acquisition
-          path: |
-            Lumon_Industries_Macrodata_Refinement_complete.zip
-            ACQUIRED_ARCHIVE_SHA256.txt
+          name: MDR-Fan-Reference-Drive-Part-1-Source-Code
+          path: output/part1/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+      - name: Upload Drive Part 2 — sounds and assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: MDR-Fan-Reference-Drive-Part-2-Sounds-and-Assets
+          path: output/part2/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+      - name: Upload Drive Part 3 — audition and manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: MDR-Fan-Reference-Drive-Part-3-Audition-and-Manifests
+          path: output/part3/*
           if-no-files-found: error
           compression-level: 0
           retention-days: 3
