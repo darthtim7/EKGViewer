@@ -12,31 +12,27 @@ jobs:
   acquire:
     runs-on: ubuntu-latest
     steps:
-      - name: Clone and package public fan-made MDR repository
+      - name: Clone and package Lumon-Industries MDR repository
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p acquired
-          git clone --depth 1 https://github.com/MilanMolnar/MacroDataRefinement.git acquired/MacroDataRefinement
-          git -C acquired/MacroDataRefinement rev-parse HEAD > acquired/SOURCE_COMMIT.txt
-          git -C acquired/MacroDataRefinement remote get-url origin > acquired/SOURCE_URL.txt
+          git clone --depth 1 https://github.com/Lumon-Industries/Macrodata-Refinement.git acquired/Macrodata-Refinement
+          git -C acquired/Macrodata-Refinement rev-parse HEAD > acquired/SOURCE_COMMIT.txt
+          git -C acquired/Macrodata-Refinement remote get-url origin > acquired/SOURCE_URL.txt
           printf '%s\n' 'Temporary acquisition copy for the MDR terminal project. Upstream provenance retained; no claim of production authenticity or upstream licensing.' > acquired/ACQUISITION_NOTE.txt
-          rm -rf acquired/MacroDataRefinement/.git
-          find acquired/MacroDataRefinement -type f -print0 | sort -z | xargs -0 sha256sum > acquired/FILE_SHA256.txt
-          find acquired/MacroDataRefinement -type f | sort > acquired/FILE_INVENTORY.txt
-          (cd acquired && zip -r -9 ../MilanMolnar_MacroDataRefinement_complete.zip .)
-          (cd acquired/MacroDataRefinement/src/assets && zip -r -9 ../../../../MilanMolnar_MacroDataRefinement_audio_and_assets.zip .)
-          (cd acquired/MacroDataRefinement/src/assets/sounds && zip -r -9 ../../../../../MilanMolnar_MacroDataRefinement_sound_collection.zip .)
-          sha256sum MilanMolnar_MacroDataRefinement_*.zip > ACQUIRED_ARCHIVE_SHA256.txt
+          rm -rf acquired/Macrodata-Refinement/.git
+          find acquired/Macrodata-Refinement -type f -print0 | sort -z | xargs -0 sha256sum > acquired/FILE_SHA256.txt
+          find acquired/Macrodata-Refinement -type f | sort > acquired/FILE_INVENTORY.txt
+          (cd acquired && zip -r -9 ../Lumon_Industries_Macrodata_Refinement_complete.zip .)
+          sha256sum Lumon_Industries_Macrodata_Refinement_complete.zip > ACQUIRED_ARCHIVE_SHA256.txt
 
       - name: Upload acquisition as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MilanMolnar-MacroDataRefinement-project-acquisition
+          name: Lumon-Industries-Macrodata-Refinement-project-acquisition
           path: |
-            MilanMolnar_MacroDataRefinement_complete.zip
-            MilanMolnar_MacroDataRefinement_audio_and_assets.zip
-            MilanMolnar_MacroDataRefinement_sound_collection.zip
+            Lumon_Industries_Macrodata_Refinement_complete.zip
             ACQUIRED_ARCHIVE_SHA256.txt
           if-no-files-found: error
           compression-level: 0
