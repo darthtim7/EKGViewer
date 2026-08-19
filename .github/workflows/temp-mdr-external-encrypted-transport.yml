@@ -11,7 +11,7 @@ permissions:
 jobs:
   transport:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Download encrypted release assets
         shell: bash
@@ -33,15 +33,22 @@ jobs:
             local file="$1" name url
             name="$(basename "$file")"
             url=""
-            # 0x0.st multipart upload.
-            url="$(curl -fsS --retry 2 --connect-timeout 20 -F "file=@${file}" https://0x0.st 2>/dev/null || true)"
+            # Litterbox: temporary large-file endpoint; one-hour retention.
+            url="$(curl -fsS --retry 2 --connect-timeout 30 \
+              -F reqtype=fileupload -F time=1h -F "fileToUpload=@${file}" \
+              https://litterbox.catbox.moe/resources/internals/api.php 2>/dev/null || true)"
+            if [[ "$url" != http* ]]; then
+              # temp.sh multipart fallback.
+              url="$(curl -fsS --retry 2 --connect-timeout 30 \
+                -F "file=@${file}" https://temp.sh/upload 2>/dev/null || true)"
+            fi
+            if [[ "$url" != http* ]]; then
+              # 0x0.st multipart fallback.
+              url="$(curl -fsS --retry 2 --connect-timeout 20 -F "file=@${file}" https://0x0.st 2>/dev/null || true)"
+            fi
             if [[ "$url" != http* ]]; then
               # transfer.sh PUT fallback.
               url="$(curl -fsS --retry 2 --connect-timeout 20 --upload-file "$file" "https://transfer.sh/${name}" 2>/dev/null || true)"
-            fi
-            if [[ "$url" != http* ]]; then
-              # bashupload fallback.
-              url="$(curl -fsS --retry 2 --connect-timeout 20 -T "$file" "https://bashupload.com/${name}" 2>/dev/null || true)"
             fi
             if [[ "$url" != http* ]]; then
               echo "No temporary transport accepted ${name}" >&2
