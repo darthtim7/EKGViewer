@@ -29,20 +29,15 @@ jobs:
           (cd acquired/MacroDataRefinement/src/assets/sounds && zip -r -9 ../../../../../MilanMolnar_MacroDataRefinement_sound_collection.zip .)
           sha256sum MilanMolnar_MacroDataRefinement_*.zip > ACQUIRED_ARCHIVE_SHA256.txt
 
-      - name: Create temporary public release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          TAG="mdr-fan-assets-acquisition-${GITHUB_RUN_ID}"
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target main \
-            --title "Temporary MDR fan asset acquisition ${GITHUB_RUN_ID}" \
-            --notes "Temporary acquisition release for local project archival. Contains a complete copy of the public MilanMolnar/MacroDataRefinement source, all fan-made sounds, and other assets. This is not a claim that any asset is production-authentic or licensed for redistribution." \
-            MilanMolnar_MacroDataRefinement_complete.zip \
-            MilanMolnar_MacroDataRefinement_audio_and_assets.zip \
-            MilanMolnar_MacroDataRefinement_sound_collection.zip \
+      - name: Upload acquisition as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MilanMolnar-MacroDataRefinement-project-acquisition
+          path: |
+            MilanMolnar_MacroDataRefinement_complete.zip
+            MilanMolnar_MacroDataRefinement_audio_and_assets.zip
+            MilanMolnar_MacroDataRefinement_sound_collection.zip
             ACQUIRED_ARCHIVE_SHA256.txt
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
