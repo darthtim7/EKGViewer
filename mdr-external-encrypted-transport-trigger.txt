@@ -1,0 +1,3 @@
+Trigger temporary neutral transport of the RSA/AES-encrypted MDR fan source and asset collection.
+Large-file endpoint attempt: 2.
+Timestamp UTC: 2026-08-19T06:00:00Z
