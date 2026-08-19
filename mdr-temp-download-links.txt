@@ -1,0 +1,6 @@
+Temporary MDR fan asset acquisition links. Remove after local verification.
+
+https://github.com/darthtim7/EKGViewer/releases/download/mdr-fan-assets-acquisition-32216708547/MilanMolnar_MacroDataRefinement_complete.zip
+https://github.com/darthtim7/EKGViewer/releases/download/mdr-fan-assets-acquisition-32216708547/MilanMolnar_MacroDataRefinement_audio_and_assets.zip
+https://github.com/darthtim7/EKGViewer/releases/download/mdr-fan-assets-acquisition-32216708547/MilanMolnar_MacroDataRefinement_sound_collection.zip
+https://github.com/darthtim7/EKGViewer/releases/download/mdr-fan-assets-acquisition-32216708547/ACQUIRED_ARCHIVE_SHA256.txt
