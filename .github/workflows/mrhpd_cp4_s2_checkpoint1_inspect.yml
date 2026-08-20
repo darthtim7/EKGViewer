@@ -1,0 +1,112 @@
+name: MRHPD Section 4 Session 2 Checkpoint 1 inspection
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_cp4_s2_checkpoint1_inspect.yml'
+      - 'mrhpd/cp4/session2/checkpoint1/inspect_response66_project.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-response66:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install inspection dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check openpyxl==3.1.5
+
+      - name: Download Response 66 restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-66-Complete-Restore-Volume-1-of-2
+          path: response66_artifacts/volume1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30613493340
+
+      - name: Download Response 66 restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-66-Complete-Restore-Volume-2-of-2
+          path: response66_artifacts/volume2
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30613493340
+
+      - name: Compile inspection utility
+        run: python -m py_compile mrhpd/cp4/session2/checkpoint1/inspect_response66_project.py
+
+      - name: Inspect exact Response 66 project
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session2/checkpoint1/inspect_response66_project.py \
+            --input-dir response66_artifacts \
+            --output-dir inspection_output | tee inspection.log
+
+      - name: Verify inspection result
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('inspection_output/MRHPD_RESPONSE66_PROJECT_INSPECTION.json')
+          data=json.loads(p.read_text())
+          assert data['status']=='passed'
+          assert data['read_only'] is True
+          assert data['accepted_predecessor_mutated'] is False
+          assert data['restore']['restore']['bytes']==177617796
+          assert data['restore']['restore']['sha256']=='38c8fa08763d5698217ce33a2bbe1e889e726087575b14fb31086f38cfe1300f'
+          assert data['project_snapshot']['bytes']==169294854
+          assert data['project_snapshot']['sha256']=='b59e5265c0515a5dbaadf55b631a37c581b828b1a37857ee3322cda532125cc4'
+          assert data['database']['integrity']=='ok'
+          assert data['database']['foreign_key_violations']==0
+          assert data['database']['current_response']==66
+          assert data['publication']['publication_matches']
+          assert data['publication']['editable_assembly_matches']
+          print(json.dumps({
+            'tables':data['database']['table_count'],
+            'current_response':data['database']['current_response'],
+            'workbooks':len(data['workbooks']),
+            'largest_workbook_sheets':data['workbooks'][0].get('sheet_count') if data['workbooks'] else None,
+            'application':data['application'].get('path'),
+          },indent=2))
+          PY
+
+      - name: Upload inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-66-Section-4-Session-2-Inspection
+          path: |
+            inspection_output/MRHPD_RESPONSE66_PROJECT_INSPECTION.json
+            inspection.log
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
+
+      - name: Preserve inspection failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Section-4-Session-2-Inspection-Failure-Diagnostics
+          path: |
+            inspection.log
+            inspection_output/
+            mrhpd/cp4/session2/checkpoint1/inspect_response66_project.py
+          if-no-files-found: warn
+          retention-days: 90
