@@ -1,0 +1,133 @@
+name: MRHPD Section 4 Session 1 Checkpoint 2 recovery
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mrhpd_cp4_s1_checkpoint2_recovery.yml'
+      - 'mrhpd/cp4/session1/checkpoint2/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-checkpoint-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out isolated noncontrolling execution branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deterministic document, workbook and PDF dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 pypdf==5.9.0
+
+      - name: Download verified complete restore through Response 64
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Complete-Restore-Through-Response-64
+          path: base_r64
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30602780836
+
+      - name: Prepare and compile the recovered builder
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session1/checkpoint2/prepare_checkpoint2_builder.py
+          python mrhpd/cp4/session1/checkpoint2/add_checkpoint2_application_aggregate.py
+          python mrhpd/cp4/session1/checkpoint2/add_checkpoint2_recovery_failures.py
+          python -m py_compile mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py
+
+      - name: Build synchronized Checkpoint 2 recovery data
+        run: |
+          set -euo pipefail
+          python mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py \
+            --base-dir base_r64 --dist dist_cp4_s1_cp2 | tee checkpoint2-build.log
+
+      - name: Verify required checkpoint outputs
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json,zipfile
+          d=Path('dist_cp4_s1_cp2')
+          archives=list(d.glob('*RECOVERY DATA THROUGH RESPONSE 65*.zip'))
+          assert len(archives)==1, archives
+          verification=json.loads((d/'MRHPD v3.0.0a Response 65 Checkpoint 2 Recovery Verification.json').read_text())
+          summary=json.loads((d/'MRHPD_RESPONSE65_CHECKPOINT2_BUILD_SUMMARY.json').read_text())
+          assert verification['status']=='passed'
+          assert verification['accepted_predecessor_mutated'] is False
+          assert verification['checkpoint_2_of_3_complete'] is True
+          assert verification['session_1_of_3_complete'] is False
+          assert summary['full_restore_due_this_checkpoint'] is False
+          assert verification['qa']['database']['integrity']=='ok'
+          assert verification['qa']['database']['foreign_key_violations']==0
+          assert verification['qa']['database']['recovery_event_records']>=57
+          assert verification['qa']['workbook']['status']=='passed'
+          assert verification['qa']['application']['status']=='passed'
+          assert verification['qa']['application']['test_count']==162
+          assert verification['qa']['publication']['status']=='passed'
+          with zipfile.ZipFile(archives[0]) as zf:
+              assert zf.testzip() is None
+              names=zf.namelist()
+              assert len(names)==len(set(names))
+              assert 'RESTORE_READ_FIRST.md' in names
+              assert 'TOOLS/apply_checkpoint_recovery.py' in names
+              assert 'CHECKPOINT_RECOVERY_MANIFEST.json' in names
+              assert any(name.endswith('RECOVERY_EVENTS_85_94.json') for name in names)
+          print(json.dumps({
+              'archive':archives[0].name,
+              'bytes':archives[0].stat().st_size,
+              'verification':verification['status'],
+              'database':verification['qa']['database'],
+              'workbook':verification['qa']['workbook'],
+              'application':verification['qa']['application'],
+              'publication':verification['qa']['publication'],
+          },indent=2))
+          PY
+
+      - name: Upload checkpoint recovery data
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-65-Checkpoint-2-Recovery-Data
+          path: |
+            dist_cp4_s1_cp2/*RECOVERY DATA THROUGH RESPONSE 65*.zip
+            dist_cp4_s1_cp2/*RECOVERY DATA THROUGH RESPONSE 65*.sha256.txt
+            dist_cp4_s1_cp2/MRHPD v3.0.0a Response 65 Checkpoint 2 Recovery Verification.json
+            dist_cp4_s1_cp2/MRHPD_RESPONSE65_CHECKPOINT2_BUILD_SUMMARY.json
+            checkpoint2-build.log
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        run: |
+          mkdir -p checkpoint2-failure
+          cp -f checkpoint2-build.log checkpoint2-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session1/checkpoint2/build_checkpoint2_recovery.py checkpoint2-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session1/checkpoint2/prepare_checkpoint2_builder.py checkpoint2-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session1/checkpoint2/add_checkpoint2_application_aggregate.py checkpoint2-failure/ 2>/dev/null || true
+          cp -f mrhpd/cp4/session1/checkpoint2/add_checkpoint2_recovery_failures.py checkpoint2-failure/ 2>/dev/null || true
+          find base_r64 dist_cp4_s1_cp2 -maxdepth 5 -type f -printf '%p\t%s bytes\n' > checkpoint2-failure/file-inventory.txt 2>/dev/null || true
+          printf 'The accepted predecessor, frozen Section 3 release, and Complete Restore Through Response 64 were never modified in place.\n' > checkpoint2-failure/RECOVERY_NOTICE.txt
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Response-65-Checkpoint-2-Failure-Diagnostics
+          path: checkpoint2-failure/
+          if-no-files-found: warn
+          retention-days: 90

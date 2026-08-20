@@ -1,0 +1,209 @@
+name: MRHPD Response 72 automated recovery launcher PR validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mrhpd/recovery/response72/**'
+      - '.github/workflows/mrhpd-response72-automated-recovery-launcher-pr.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out isolated recovery branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download verified Response 72 volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-1-of-2-v2
+          path: response72_downloads/volume1
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Download verified Response 72 volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Complete-Restore-Volume-2-of-2-v2
+          path: response72_downloads/volume2
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: darthtim7/EKGViewer
+          run-id: 30677563971
+
+      - name: Compile and run complete automated recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          launcher='mrhpd/recovery/response72/START_MRHPD_RESPONSE72_RECOVERY.py'
+          python -m py_compile "$launcher"
+          python "$launcher" --print-file-names | tee response72-exact-file-names.json
+          python "$launcher" \
+            --search-root response72_downloads \
+            --output-root response72_automated_recovery | tee response72-automated-recovery-console.log
+
+      - name: Verify terminal automated-recovery state
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+          root = Path('response72_automated_recovery')
+          status = json.loads((root / 'MRHPD Response 72 Automated Recovery Status.json').read_text(encoding='utf-8'))
+          assert status['status'] == 'passed', status
+          assert status['source_downloads_modified'] is False
+          assert len(status['checkpoints']) >= 7
+          assert all(row['status'] == 'passed' for row in status['checkpoints'])
+          restore = root / status['expected_restore']['name']
+          assert restore.stat().st_size == 159_186_352
+          h = hashlib.sha256()
+          with restore.open('rb') as handle:
+              for block in iter(lambda: handle.read(1024 * 1024), b''):
+                  h.update(block)
+          assert h.hexdigest() == 'cb6d2de9bb351a4ff580e8ac0ac071a774670974098da88be822d64b437b25ce'
+          with zipfile.ZipFile(restore) as zf:
+              assert zf.testzip() is None
+          assert (root / 'RESTORE_PACKAGE').is_dir()
+          assert (root / 'CURRENT_PROJECT').is_dir()
+          print(json.dumps({
+              'status':'passed',
+              'checkpoints':len(status['checkpoints']),
+              'complete_restore':status['expected_restore'],
+              'current_project':str((root/'CURRENT_PROJECT').resolve()),
+          },indent=2))
+          PY
+
+      - name: Build cross-platform exact-name launcher package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='launcher_package/MRHPD Response 72 Automated Recovery Launcher v1.0.0'
+          mkdir -p "$root"
+          cp mrhpd/recovery/response72/START_MRHPD_RESPONSE72_RECOVERY.py "$root/START MRHPD RESPONSE 72 RECOVERY.py"
+          cp response72-exact-file-names.json "$root/MRHPD Response 72 Exact File Names.json"
+          cp 'response72_automated_recovery/MRHPD Response 72 Automated Recovery Status.json' "$root/MRHPD Response 72 Automation Validation QA.json"
+          cp response72-automated-recovery-console.log "$root/MRHPD Response 72 Automation Validation Console Log.txt"
+
+          cat > "$root/START MRHPD RESPONSE 72 RECOVERY - WINDOWS.bat" <<'BAT'
+          @echo off
+          setlocal
+          cd /d "%~dp0"
+          where py >nul 2>nul
+          if %errorlevel%==0 (
+            py -3 "START MRHPD RESPONSE 72 RECOVERY.py" %*
+            set rc=%errorlevel%
+            if not %rc%==0 pause
+            exit /b %rc%
+          )
+          where python >nul 2>nul
+          if %errorlevel%==0 (
+            python "START MRHPD RESPONSE 72 RECOVERY.py" %*
+            set rc=%errorlevel%
+            if not %rc%==0 pause
+            exit /b %rc%
+          )
+          echo Python 3 was not found. Install Python 3, then rerun this launcher.
+          pause
+          exit /b 1
+          BAT
+
+          cat > "$root/START MRHPD RESPONSE 72 RECOVERY - MAC LINUX.command" <<'SH'
+          #!/bin/sh
+          set -u
+          cd "$(dirname "$0")" || exit 1
+          if command -v python3 >/dev/null 2>&1; then
+            exec python3 "START MRHPD RESPONSE 72 RECOVERY.py" "$@"
+          fi
+          if command -v python >/dev/null 2>&1; then
+            exec python "START MRHPD RESPONSE 72 RECOVERY.py" "$@"
+          fi
+          printf '%s\n' 'Python 3 was not found. Install Python 3, then rerun this launcher.' >&2
+          exit 1
+          SH
+          chmod +x "$root/START MRHPD RESPONSE 72 RECOVERY - MAC LINUX.command"
+
+          cat > "$root/READ FIRST - AUTOMATED RESPONSE 72 RECOVERY.txt" <<'TXT'
+          HUMAN PATHOGEN DATABASE — RESPONSE 72 AUTOMATED RECOVERY
+          Launcher version 1.0.0
+
+          REQUIRED DOWNLOADS — EXACT FILENAMES
+          MRHPD v3.0.0a Response 72 Complete Restore Volume 1 of 2.zip
+          MRHPD v3.0.0a Response 72 Complete Restore Volume 2 of 2.zip
+
+          INNER GOVERNED VOLUME WRAPPERS
+          MRHPD v3.0.0a Response 72 Complete Restore Drive Volume 1 of 2.zip
+          MRHPD v3.0.0a Response 72 Complete Restore Drive Volume 2 of 2.zip
+
+          RECONSTRUCTED COMPLETE RESTORE
+          Medical References - Human Pathogen Database v3.0.0a Part 8 of 8 Remediation Section 4 of 5 COMPLETE Session 3 of 3 COMPLETE RESTORE THROUGH RESPONSE 72 2026-08-01 0117 UTC.zip
+          Bytes: 159,186,352
+          SHA-256: cb6d2de9bb351a4ff580e8ac0ac071a774670974098da88be822d64b437b25ce
+
+          Place this launcher folder anywhere within the same directory tree as both
+          downloaded volume files. Double-click the Windows BAT file or run the
+          macOS/Linux COMMAND file. The launcher discovers files by ZIP contents and
+          cryptographic identity, extracts nested envelopes, verifies and reassembles
+          the restore, runs the embedded verifier, and extracts the current project.
+          Manual renaming, nested extraction, manifest selection, and part selection
+          are not required. Source downloads are never modified.
+          TXT
+
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os, time, zipfile
+          root = Path('launcher_package/MRHPD Response 72 Automated Recovery Launcher v1.0.0')
+          stamp = time.strftime('%Y-%m-%d %H%M UTC', time.gmtime())
+          out = Path('launcher_package') / f'MRHPD v3.0.0a Response 72 Automated Recovery Launcher v1.0.0 {stamp}.zip'
+          with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as zf:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file():
+                      zf.write(path,path.relative_to(root).as_posix())
+          with zipfile.ZipFile(out) as zf:
+              assert zf.testzip() is None
+              assert len(zf.namelist()) == len(set(zf.namelist()))
+          h=hashlib.sha256()
+          with out.open('rb') as handle:
+              for block in iter(lambda:handle.read(1024*1024),b''):
+                  h.update(block)
+          qa={
+              'schema':'mrhpd-response72-automated-recovery-launcher-delivery-1.0',
+              'status':'passed',
+              'launcher_version':'1.0.0',
+              'package':{'name':out.name,'bytes':out.stat().st_size,'sha256':h.hexdigest()},
+              'validated_against_actual_response72_volumes':True,
+              'validated_restore_bytes':159_186_352,
+              'validated_restore_sha256':'cb6d2de9bb351a4ff580e8ac0ac071a774670974098da88be822d64b437b25ce',
+              'source_downloads_modified':False,
+          }
+          qa_path=Path('launcher_package/MRHPD Response 72 Automated Recovery Launcher Delivery QA.json')
+          qa_path.write_text(json.dumps(qa,indent=2)+'\n',encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as handle:
+              handle.write(f'package_path={out.as_posix()}\n')
+              handle.write(f'package_name={out.name}\n')
+          print(json.dumps(qa,indent=2))
+          PY
+
+      - name: Upload validated automated recovery launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-72-Automated-Recovery-Launcher-v1.0.0
+          path: |
+            ${{ steps.package.outputs.package_path }}
+            launcher_package/MRHPD Response 72 Automated Recovery Launcher Delivery QA.json
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
