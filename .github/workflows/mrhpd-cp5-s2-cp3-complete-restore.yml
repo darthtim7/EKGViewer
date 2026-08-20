@@ -1,0 +1,148 @@
+name: MRHPD Section 5 Session 2 complete restore
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mrhpd/cp5/session2/checkpoint3/**'
+      - '.github/workflows/mrhpd-cp5-s2-cp3-complete-restore.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-session2-complete-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned document workbook PDF image and indexing dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 python-docx==1.2.0 reportlab==4.4.3 \
+            pypdf==5.9.0 pymupdf==1.26.4 pillow==12.3.0
+
+      - name: Download Response 77 complete restore volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-1-v2
+          path: inputs/response77/volume1
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30694922808
+
+      - name: Download Response 77 complete restore volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-2-v2
+          path: inputs/response77/volume2
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30694922808
+
+      - name: Download Response 77 complete restore volume 3
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-3-v2
+          path: inputs/response77/volume3
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30694922808
+
+      - name: Download Response 80 checkpoint recovery
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-80-Section-5-Session-2-Checkpoint-2-Recovery-Delivery
+          path: inputs/response80
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30703746238
+
+      - name: Preserve inherited workbook OOXML extensions and compile terminal builders
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp5/session2/checkpoint3/preserve_workbook_extensions.py
+          python mrhpd/cp5/session2/checkpoint3/preserve_workbook_extensions.py
+          python -m py_compile mrhpd/cp5/session2/checkpoint1/inspect_response77.py
+          python -m py_compile mrhpd/cp5/session2/checkpoint2/build_section5_session2_checkpoint2.py
+          python -m py_compile mrhpd/cp5/session2/checkpoint3/build_section5_session2_complete_restore.py
+          python -m py_compile mrhpd/cp5/session2/checkpoint3/verify_section5_session2_complete_outputs.py
+
+      - name: Build and clean-verify the complete Session 2 restore
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session2/checkpoint3/build_section5_session2_complete_restore.py \
+            --response77-dir inputs/response77 \
+            --response80-dir inputs/response80 \
+            --dist dist_cp5_s2_cp3 | tee section5-session2-complete-build.log
+
+      - name: Independently verify the emitted outputs
+        run: |
+          set -euo pipefail
+          python mrhpd/cp5/session2/checkpoint3/verify_section5_session2_complete_outputs.py \
+            dist_cp5_s2_cp3 | tee section5-session2-complete-verification.log
+
+      - name: Upload Response 81 complete restore volume 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-81-Complete-Restore-Volume-1-of-3
+          path: dist_cp5_s2_cp3/MRHPD v3.0.0a Response 81 Complete Restore Drive Volume 1 of 3.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Response 81 complete restore volume 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-81-Complete-Restore-Volume-2-of-3
+          path: dist_cp5_s2_cp3/MRHPD v3.0.0a Response 81 Complete Restore Drive Volume 2 of 3.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Response 81 complete restore volume 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-81-Complete-Restore-Volume-3-of-3
+          path: dist_cp5_s2_cp3/MRHPD v3.0.0a Response 81 Complete Restore Drive Volume 3 of 3.zip
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Upload Session 2 complete verification and controls
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-81-Section-5-Session-2-Complete-Verification
+          path: |
+            dist_cp5_s2_cp3/MRHPD v3.0.0a Response 81 Section 5 Session 2 Complete Verification Delivery *.zip
+            dist_cp5_s2_cp3/MRHPD_RESPONSE81_SECTION5_SESSION2_COMPLETE_BUILD_SUMMARY.json
+            dist_cp5_s2_cp3/MRHPD v3.0.0a Response 81 Section 5 Session 2 Complete Verification.json
+            dist_cp5_s2_cp3/MRHPD v3.0.0a Response 81 Exact File Names.txt
+            dist_cp5_s2_cp3/MRHPD_RESPONSE81_COMPLETE_RESTORE_TRANSPORT_MANIFEST.json
+            dist_cp5_s2_cp3/reassemble_response81_complete_restore.py
+            section5-session2-complete-build.log
+            section5-session2-complete-verification.log
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Preserve failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-81-Section-5-Session-2-Complete-Failure-Diagnostics
+          path: |
+            mrhpd/cp5/session2/checkpoint3
+            dist_cp5_s2_cp3
+            section5-session2-complete-build.log
+            section5-session2-complete-verification.log
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 6

@@ -1,0 +1,65 @@
+name: MRHPD Section 5 Session 2 Checkpoint 1 inspect Response 77
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'mrhpd/cp5/session2/checkpoint1/**'
+      - '.github/workflows/mrhpd-cp5-s2-cp1-inspect-response77.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-response77:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned inspection dependencies
+        run: python -m pip install --disable-pip-version-check openpyxl==3.1.5 pypdf==5.9.0 pillow==12.3.0
+      - name: Download Response 77 volume 1
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-1-v2
+          path: inputs/response77/volume1
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30694922808
+      - name: Download Response 77 volume 2
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-2-v2
+          path: inputs/response77/volume2
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30694922808
+      - name: Download Response 77 volume 3
+        uses: actions/download-artifact@v4
+        with:
+          name: MRHPD-v3.0.0a-Response-77-Complete-Restore-Volume-3-v2
+          path: inputs/response77/volume3
+          github-token: ${{ github.token }}
+          repository: darthtim7/EKGViewer
+          run-id: 30694922808
+      - name: Compile and inspect Response 77
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile mrhpd/cp5/session2/checkpoint1/inspect_response77.py
+          python mrhpd/cp5/session2/checkpoint1/inspect_response77.py inputs/response77 inspection_response77 | tee response77-inspection.log
+      - name: Upload inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: MRHPD-Response-77-Project-Inspection
+          path: |
+            inspection_response77/MRHPD_RESPONSE77_PROJECT_INSPECTION.json
+            response77-inspection.log
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
