@@ -1,0 +1,2 @@
+Trigger resolution of short-lived signed URLs for the encrypted MDR fan collection transport.
+Timestamp UTC: 2026-08-19T05:45:00Z
